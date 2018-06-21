@@ -51,11 +51,15 @@
     "private/protocol",
     "private/protocol/eventstream",
     "private/protocol/eventstream/eventstreamapi",
+    "private/protocol/json/jsonutil",
+    "private/protocol/jsonrpc",
     "private/protocol/query",
     "private/protocol/query/queryutil",
     "private/protocol/rest",
     "private/protocol/restxml",
     "private/protocol/xml/xmlutil",
+    "service/kms",
+    "service/kms/kmsiface",
     "service/s3",
     "service/sts"
   ]
@@ -308,6 +312,12 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
   name = "github.com/posener/complete"
   packages = [
     ".",
@@ -350,12 +360,19 @@
     "bcrypt",
     "blowfish",
     "cast5",
+    "curve25519",
+    "ed25519",
+    "ed25519/internal/edwards25519",
+    "internal/chacha20",
+    "internal/subtle",
     "openpgp",
     "openpgp/armor",
     "openpgp/elgamal",
     "openpgp/errors",
     "openpgp/packet",
-    "openpgp/s2k"
+    "openpgp/s2k",
+    "poly1305",
+    "ssh"
   ]
   revision = "7f39a6fea4fe9364fb61e1def6a268a51b4f3a06"
 
@@ -445,6 +462,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "37b1dfa1faa7fb7f1638e4dad103736d2c423558dc0ffd6467c8c60e4d3353be"
+  inputs-digest = "fc80c9df166cf0fdfd2bfec8215f857b4d68b3ac483924d57d1f3049ed23105c"
   solver-name = "gps-cdcl"
   solver-version = 1

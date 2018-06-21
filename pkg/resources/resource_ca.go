@@ -5,14 +5,21 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 
+	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/util"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh"
 )
 
 const (
-	kmsKeyID        = "kms_key_id"
+	schemaKmsKeyID            = "kms_key_id"
+	schemaEncryptedPrivateKey = "encrypted_ca"
+	schemaPublicKey           = "public_key"
+	schemaEncryptedPassword   = "encrypted_password"
+
 	keySize         = 4096
 	caPasswordBytes = 32
 )
@@ -26,10 +33,26 @@ func CA() *schema.Resource {
 		Delete: resourceCADelete,
 
 		Schema: map[string]*schema.Schema{
-			kmsKeyID: &schema.Schema{
+			schemaKmsKeyID: &schema.Schema{
 				Type:        schema.TypeString,
 				Required:    true,
 				Description: "The kms key with which we should encrypt the CA password.",
+			},
+
+			schemaEncryptedPrivateKey: &schema.Schema{
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "This is the base64 encoded CA encrypted private key.",
+			},
+			schemaPublicKey: &schema.Schema{
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "This is the plaintext CA public key in openssh format.",
+			},
+			schemaEncryptedPassword: &schema.Schema{
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "This is the kms encrypted password.",
 			},
 		},
 	}
@@ -46,7 +69,7 @@ func resourceCACreate(d *schema.ResourceData, m interface{}) error {
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	}
 
-	password, err := generateRandomBytes(caPasswordBytes)
+	password, err := util.GenerateRandomBytes(caPasswordBytes)
 	if err != nil {
 		return err
 	}
@@ -61,9 +84,17 @@ func resourceCACreate(d *schema.ResourceData, m interface{}) error {
 	if err != nil {
 		return errors.Wrap(err, "Could not PEM encode encrypted CA")
 	}
+	d.Set(
+		schemaEncryptedPrivateKey,
+		base64.StdEncoding.EncodeToString(encoded.Bytes()))
 
-	d.Set("encrypted_ca", encoded.Bytes())
-	return
+	sshPubKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return errors.Wrap(err, "Could not generate openssh public key")
+	}
+	sshPubKeyBytes := ssh.MarshalAuthorizedKey(sshPubKey)
+	d.Set(schemaPublicKey, string(sshPubKeyBytes))
+	return nil
 }
 
 func resourceCARead(d *schema.ResourceData, m interface{}) error {
@@ -75,14 +106,6 @@ func resourceCAUpdate(d *schema.ResourceData, m interface{}) error {
 }
 
 func resourceCADelete(d *schema.ResourceData, m interface{}) error {
+	d.SetId("")
 	return nil
-}
-
-func generateRandomBytes(n int) ([]byte, error) {
-	b := make([]byte, n)
-	_, err := rand.Read(b)
-	if err != nil {
-		return nil, errors.Wrap(err, "Could not generate password")
-	}
-	return b, nil
 }
