@@ -1,6 +1,8 @@
 package aws
 
 import (
+	"encoding/base64"
+
 	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/aws/aws-sdk-go/service/kms/kmsiface"
 	"github.com/pkg/errors"
@@ -21,5 +23,7 @@ func (k *KMS) EncryptBytes(plaintext []byte, keyID string) (string, error) {
 	input := &kms.EncryptInput{}
 	input.SetKeyId(keyID).SetPlaintext(plaintext)
 	response, err := k.Encrypt(input)
-	return string(response.CiphertextBlob), errors.Wrap(err, "Could not encrypt password")
+
+	return base64.StdEncoding.EncodeToString(response.CiphertextBlob),
+		errors.Wrap(err, "Could not encrypt password")
 }
