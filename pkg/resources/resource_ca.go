@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 
+	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/aws"
 	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/util"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/pkg/errors"
@@ -26,11 +27,11 @@ const (
 
 // CA is a bless CA resource
 func CA() *schema.Resource {
+	ca := newResourceCA()
 	return &schema.Resource{
-		Create: resourceCACreate,
-		Read:   resourceCARead,
-		Update: resourceCAUpdate,
-		Delete: resourceCADelete,
+		Create: ca.Create,
+		Read:   ca.Read,
+		Delete: ca.Delete,
 
 		Schema: map[string]*schema.Schema{
 			schemaKmsKeyID: &schema.Schema{
@@ -58,54 +59,92 @@ func CA() *schema.Resource {
 	}
 }
 
-func resourceCACreate(d *schema.ResourceData, m interface{}) error {
-	// keyID := d.Get(kmsKeyID).(string)
+// resourceCA is a namespace
+type resourceCA struct{}
+
+func newResourceCA() resourceCA {
+	return resourceCA{}
+}
+
+type keyPair struct {
+	publicKey              string
+	b64EncryptedPrivateKey string
+	password               []byte
+}
+
+// Create creates a CA
+func (ca resourceCA) Create(d *schema.ResourceData, meta interface{}) error {
+	awsClient := meta.(*aws.Client)
+	keyPair, err := ca.createKeypair()
+	if err != nil {
+		return err
+	}
+	encryptedPassword, err := ca.encryptPassword(awsClient, keyPair)
+	if err != nil {
+		return err
+	}
+
+	d.Set(schemaEncryptedPrivateKey, keyPair.b64EncryptedPrivateKey)
+	d.Set(schemaPublicKey, keyPair.publicKey)
+	d.Set(schemaEncryptedPassword, encryptedPassword)
+
+	return nil
+}
+
+// Read reads the ca
+func (ca resourceCA) Read(d *schema.ResourceData, meta interface{}) error {
+	return nil
+}
+
+// Delete deletes the ca
+func (ca resourceCA) Delete(d *schema.ResourceData, meta interface{}) error {
+	d.SetId("")
+	return nil
+}
+
+// ------------ helpers ------------------
+func (ca resourceCA) encryptPassword(client *aws.Client, kp *keyPair) (string, error) {
+
+	return "", nil
+}
+
+func (ca resourceCA) createKeypair() (*keyPair, error) {
+	// generate private key
 	privateKey, err := rsa.GenerateKey(rand.Reader, keySize)
 	if err != nil {
-		return errors.Wrap(err, "Private key generation failed")
+		return nil, errors.Wrap(err, "Private key generation failed")
 	}
 	block := &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	}
 
+	// generate password
 	password, err := util.GenerateRandomBytes(caPasswordBytes)
 	if err != nil {
-		return err
+		return nil, errors.Wrap(err, "Could not generate enough random bytes")
 	}
 
+	// encrypt the private key
 	block, err = x509.EncryptPEMBlock(rand.Reader, block.Type, block.Bytes, password, x509.PEMCipherAES256)
 	if err != nil {
-		return errors.Wrap(err, "Failed to encrypt CA")
+		return nil, errors.Wrap(err, "Failed to encrypt CA")
 	}
-
 	var encoded bytes.Buffer
 	err = pem.Encode(&encoded, block)
 	if err != nil {
-		return errors.Wrap(err, "Could not PEM encode encrypted CA")
+		return nil, errors.Wrap(err, "Could not PEM encode encrypted CA")
 	}
-	d.Set(
-		schemaEncryptedPrivateKey,
-		base64.StdEncoding.EncodeToString(encoded.Bytes()))
 
+	// public key in openssh format
 	sshPubKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	if err != nil {
-		return errors.Wrap(err, "Could not generate openssh public key")
+		return nil, errors.Wrap(err, "Could not generate openssh public key")
 	}
-	sshPubKeyBytes := ssh.MarshalAuthorizedKey(sshPubKey)
-	d.Set(schemaPublicKey, string(sshPubKeyBytes))
-	return nil
-}
 
-func resourceCARead(d *schema.ResourceData, m interface{}) error {
-	return nil
-}
-
-func resourceCAUpdate(d *schema.ResourceData, m interface{}) error {
-	return nil
-}
-
-func resourceCADelete(d *schema.ResourceData, m interface{}) error {
-	d.SetId("")
-	return nil
+	return &keyPair{
+		publicKey:              string(ssh.MarshalAuthorizedKey(sshPubKey)),
+		b64EncryptedPrivateKey: base64.StdEncoding.EncodeToString(encoded.Bytes()),
+		password:               password,
+	}, nil
 }

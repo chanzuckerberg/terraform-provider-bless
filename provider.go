@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/aws"
 	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/resources"
 	"github.com/hashicorp/terraform/helper/schema"
 )
@@ -33,5 +34,10 @@ func Provider() *schema.Provider {
 		ResourcesMap: map[string]*schema.Resource{
 			"bless_ca": resources.CA(),
 		},
+		ConfigureFunc: configureProvider,
 	}
+}
+
+func configureProvider(s *schema.ResourceData) (interface{}, error) {
+	return aws.NewClient(s)
 }

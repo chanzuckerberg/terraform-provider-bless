@@ -10,11 +10,16 @@ import (
 
 // KMS is a kms client
 type KMS struct {
-	svc kmsiface.KMSAPI
+	kmsiface.KMSAPI
 }
 
-// NewKMS returns a new KMS client
-func NewKMS(d *schema.ResourceData) (*KMS, error) {
+// Client is an AWS client
+type Client struct {
+	KMS
+}
+
+// NewClient returns a new aws client
+func NewClient(d *schema.ResourceData) (*Client, error) {
 	regionOverride := d.Get("region").(string)
 	var region *string
 	if regionOverride != "" {
@@ -26,8 +31,11 @@ func NewKMS(d *schema.ResourceData) (*KMS, error) {
 				Region: region,
 			},
 			SharedConfigState: session.SharedConfigEnable,
+			Profile:           d.Get("profile").(string),
 		},
 	))
-	svc := kms.New(kmsSession)
-	return &KMS{svc: svc}, nil
+	client := &Client{
+		KMS: KMS{kms.New(kmsSession)},
+	}
+	return client, nil
 }
