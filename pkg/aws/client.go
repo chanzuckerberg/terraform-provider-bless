@@ -4,14 +4,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kms"
-	"github.com/aws/aws-sdk-go/service/kms/kmsiface"
 	"github.com/hashicorp/terraform/helper/schema"
 )
-
-// KMS is a kms client
-type KMS struct {
-	kmsiface.KMSAPI
-}
 
 // Client is an AWS client
 type Client struct {

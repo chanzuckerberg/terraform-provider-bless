@@ -74,12 +74,17 @@ type keyPair struct {
 
 // Create creates a CA
 func (ca resourceCA) Create(d *schema.ResourceData, meta interface{}) error {
-	awsClient := meta.(*aws.Client)
+	awsClient, ok := meta.(*aws.Client)
+	if !ok {
+		return errors.New("meta is not of type *aws.Client")
+	}
+
+	kmsKeyID := d.Get(schemaKmsKeyID).(string)
 	keyPair, err := ca.createKeypair()
 	if err != nil {
 		return err
 	}
-	encryptedPassword, err := ca.encryptPassword(awsClient, keyPair)
+	encryptedPassword, err := awsClient.EncryptBytes(keyPair.password, kmsKeyID)
 	if err != nil {
 		return err
 	}
@@ -87,6 +92,7 @@ func (ca resourceCA) Create(d *schema.ResourceData, meta interface{}) error {
 	d.Set(schemaEncryptedPrivateKey, keyPair.b64EncryptedPrivateKey)
 	d.Set(schemaPublicKey, keyPair.publicKey)
 	d.Set(schemaEncryptedPassword, encryptedPassword)
+	d.SetId(util.HashForState(keyPair.publicKey))
 
 	return nil
 }
@@ -103,11 +109,6 @@ func (ca resourceCA) Delete(d *schema.ResourceData, meta interface{}) error {
 }
 
 // ------------ helpers ------------------
-func (ca resourceCA) encryptPassword(client *aws.Client, kp *keyPair) (string, error) {
-
-	return "", nil
-}
-
 func (ca resourceCA) createKeypair() (*keyPair, error) {
 	// generate private key
 	privateKey, err := rsa.GenerateKey(rand.Reader, keySize)
