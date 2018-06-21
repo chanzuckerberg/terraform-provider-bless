@@ -9,7 +9,7 @@ import (
 
 // Client is an AWS client
 type Client struct {
-	KMS
+	KMS KMS
 }
 
 // NewClient returns a new aws client
@@ -29,7 +29,7 @@ func NewClient(d *schema.ResourceData) (*Client, error) {
 		},
 	))
 	client := &Client{
-		KMS: KMS{kms.New(kmsSession)},
+		KMS: NewKMS(kms.New(kmsSession)),
 	}
 	return client, nil
 }
