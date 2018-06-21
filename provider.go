@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/aws"
-	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/resources"
+	"github.com/chanzuckerberg/terraform-provider-bless/pkg/aws"
+	"github.com/chanzuckerberg/terraform-provider-bless/pkg/resources"
 	"github.com/hashicorp/terraform/helper/schema"
 )
 

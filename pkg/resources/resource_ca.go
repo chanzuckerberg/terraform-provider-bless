@@ -8,8 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 
-	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/aws"
-	"github.com/chanzuckerberg/terraform-provider-bless-ca/pkg/util"
+	"github.com/chanzuckerberg/terraform-provider-bless/pkg/aws"
+	"github.com/chanzuckerberg/terraform-provider-bless/pkg/util"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
