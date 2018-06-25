@@ -132,21 +132,21 @@ func (ca resourceCA) createKeypair() (*keyPair, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to encrypt CA")
 	}
-	var encoded bytes.Buffer
-	err = pem.Encode(&encoded, block)
+	var encryptedPEMBytes bytes.Buffer
+	err = pem.Encode(&encryptedPEMBytes, block)
 	if err != nil {
 		return nil, errors.Wrap(err, "Could not PEM encode encrypted CA")
 	}
 
 	// public key in openssh format
-	sshPubKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	sshPublicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "Could not generate openssh public key")
 	}
 
 	return &keyPair{
-		publicKey:              string(ssh.MarshalAuthorizedKey(sshPubKey)),
-		b64EncryptedPrivateKey: base64.StdEncoding.EncodeToString(encoded.Bytes()),
+		publicKey:              string(ssh.MarshalAuthorizedKey(sshPublicKey)),
+		b64EncryptedPrivateKey: base64.StdEncoding.EncodeToString(encryptedPEMBytes.Bytes()),
 		password:               password,
 	}, nil
 }
