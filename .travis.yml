@@ -1,0 +1,11 @@
+dist: trusty
+language: go
+
+jobs:
+  include:
+    - stage: test
+      script: make test
+
+script:
+notifications:
+    slack: chanzuckerbergteam:joJMPVlMODhdD31qDpjxfduh
