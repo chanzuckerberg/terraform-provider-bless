@@ -22,7 +22,7 @@ const (
 	schemaEncryptedPassword   = "encrypted_password"
 
 	keySize         = 4096
-	caPasswordBytes = 32
+	caPasswordBytes = 64
 )
 
 // CA is a bless CA resource
@@ -64,8 +64,8 @@ func CA() *schema.Resource {
 // resourceCA is a namespace
 type resourceCA struct{}
 
-func newResourceCA() resourceCA {
-	return resourceCA{}
+func newResourceCA() *resourceCA {
+	return &resourceCA{}
 }
 
 type keyPair struct {
@@ -75,7 +75,7 @@ type keyPair struct {
 }
 
 // Create creates a CA
-func (ca resourceCA) Create(d *schema.ResourceData, meta interface{}) error {
+func (ca *resourceCA) Create(d *schema.ResourceData, meta interface{}) error {
 	awsClient, ok := meta.(*aws.Client)
 	if !ok {
 		return errors.New("meta is not of type *aws.Client")
@@ -99,18 +99,18 @@ func (ca resourceCA) Create(d *schema.ResourceData, meta interface{}) error {
 }
 
 // Read reads the ca
-func (ca resourceCA) Read(d *schema.ResourceData, meta interface{}) error {
+func (ca *resourceCA) Read(d *schema.ResourceData, meta interface{}) error {
 	return nil
 }
 
 // Delete deletes the ca
-func (ca resourceCA) Delete(d *schema.ResourceData, meta interface{}) error {
+func (ca *resourceCA) Delete(d *schema.ResourceData, meta interface{}) error {
 	d.SetId("")
 	return nil
 }
 
 // ------------ helpers ------------------
-func (ca resourceCA) createKeypair() (*keyPair, error) {
+func (ca *resourceCA) createKeypair() (*keyPair, error) {
 	// generate private key
 	privateKey, err := rsa.GenerateKey(rand.Reader, keySize)
 	if err != nil {
