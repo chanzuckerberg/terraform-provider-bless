@@ -3,7 +3,6 @@ package aws
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/hashicorp/terraform/helper/schema"
 )
 
@@ -19,7 +18,7 @@ func NewClient(d *schema.ResourceData) (*Client, error) {
 	if regionOverride != "" {
 		region = aws.String(regionOverride)
 	}
-	kmsSession := session.Must(session.NewSessionWithOptions(
+	sess := session.Must(session.NewSessionWithOptions(
 		session.Options{
 			Config: aws.Config{
 				Region: region,
@@ -29,7 +28,7 @@ func NewClient(d *schema.ResourceData) (*Client, error) {
 		},
 	))
 	client := &Client{
-		KMS: NewKMS(kms.New(kmsSession)),
+		KMS: NewKMS(sess),
 	}
 	return client, nil
 }

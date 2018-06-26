@@ -30,7 +30,7 @@ func getTestProviders() (map[string]terraform.ResourceProvider, *KMSMock) {
 	kmsMock := &KMSMock{}
 	ca.ConfigureFunc = func(s *schema.ResourceData) (interface{}, error) {
 		client := &aws.Client{
-			KMS: aws.NewKMS(kmsMock),
+			KMS: aws.KMS{Svc: kmsMock},
 		}
 		return client, nil
 	}
