@@ -23,12 +23,6 @@ func Provider() *schema.Provider {
 				Optional: true,
 				Default:  "",
 			},
-			"allowed_account_ids": {
-				Type:     schema.TypeSet,
-				Elem:     &schema.Schema{Type: schema.TypeString},
-				Optional: true,
-				Set:      schema.HashString,
-			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
 			"bless_ca": CA(),
