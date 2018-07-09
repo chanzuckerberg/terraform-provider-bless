@@ -30,5 +30,6 @@ func NewClient(d *schema.ResourceData) (*Client, error) {
 	client := &Client{
 		KMS: NewKMS(sess),
 	}
+
 	return client, nil
 }
