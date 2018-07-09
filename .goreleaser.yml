@@ -1,0 +1,8 @@
+# .goreleaser.yml
+builds:
+  - binary: terraform-provider-bless
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
