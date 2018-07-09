@@ -7,6 +7,7 @@ jobs:
       script: make test
 
 deploy:
+# https://goreleaser.com/ci/
 - provider: script
   skip_cleanup: true
   script: curl -sL https://git.io/goreleaser | bash
