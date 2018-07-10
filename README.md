@@ -13,7 +13,7 @@ This provider generates a BLESS CA without leaking any sensitive material to the
 ```hcl
 provider "bless" {
   region  = "us-east-1"
-  profile = "czi-si"
+  profile = "<aws_profile>"
 }
 
 resource "bless" "example" {
