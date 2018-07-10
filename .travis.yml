@@ -1,0 +1,7 @@
+dist: trusty
+language: go
+
+jobs:
+  include:
+    - stage: test
+      script: make test

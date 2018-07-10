@@ -1,0 +1,11 @@
+builds:
+  - binary: terraform-provider-bless
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+release:
+  github:
+    owner: chanzuckerberg
+    name: terraform-provider-bless
