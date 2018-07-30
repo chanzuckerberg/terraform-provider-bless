@@ -2,11 +2,11 @@ package provider
 
 import (
 	"archive/zip"
+	"html/template"
 	"io/ioutil"
 	"path/filepath"
 	"time"
 
-	"github.com/alecthomas/template"
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/util"
 	"github.com/gobuffalo/packr"
 	"github.com/hashicorp/terraform/helper/schema"
@@ -126,7 +126,10 @@ func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	t := template.Must(template.New("config").Parse(string(tplBytes)))
+	t, err := template.New("config").Parse(string(tplBytes))
+	if err != nil {
+		return errors.Wrap(err, "could not load template")
+	}
 
 	d.Set(SchemaOutputPath, outFile.Name())
 	d.SetId(util.HashForState(outFile.Name()))
