@@ -7,11 +7,11 @@ logging_level = INFO
 username_validation = email
 
 [Bless CA]
-${region}_password = ${encrypted_password}
-ca_private_key = ${encrypted_ca}
+default_password = {{ .EncryptedPassword }}
+ca_private_key = {{ .EncryptedPrivateKey }}
 
 [KMS Auth]
 use_kmsauth = True
-kmsauth_key_id = ${kms_auth_key_id}
-kmsauth_serviceid = ${name}
+kmsauth_key_id = {{ .KMSAuthKeyID }}
+kmsauth_serviceid = {{ .Name }}
 kmsauth_remote_usernames_allowed = *

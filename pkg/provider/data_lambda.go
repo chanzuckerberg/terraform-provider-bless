@@ -15,7 +15,9 @@ import (
 
 const (
 	// SchemaOutputPath is the output_path of the zip
-	SchemaOutputPath = "output_path"
+	SchemaOutputPath         = "output_path"
+	schemaServiceName        = "service_name"
+	schemaOutputBase64Sha256 = "output_base64sha256"
 )
 
 // Lambda is a bless lambda resource
@@ -37,6 +39,12 @@ func Lambda() *schema.Resource {
 				Description: "The encrypted CA private key",
 				ForceNew:    true,
 			},
+			schemaServiceName: &schema.Schema{
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "The name of the bless CA service. Used for kmsauth.",
+				ForceNew:    true,
+			},
 
 			// computed
 			SchemaOutputPath: &schema.Schema{
@@ -44,9 +52,26 @@ func Lambda() *schema.Resource {
 				Computed:    true,
 				Description: "Temporary directory that holds the bless zip",
 			},
+			schemaOutputBase64Sha256: &schema.Schema{
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Base64Sha256 or temporary bless.zip contents",
+			},
 		},
 	}
 
+}
+
+//
+type blessConfig struct {
+	// EncryptedPassword is the kms encrypted password for the CA private key
+	EncryptedPassword string
+	// EncryptedPrivateKey is a password encrypted CA private key
+	EncryptedPrivateKey string
+	// Name is the name of this service
+	Name string
+	// KMSAuthKeyID is the kmsauth key ID
+	KMSAuthKeyID string
 }
 
 // resourceLambda is a namespace
@@ -120,18 +145,42 @@ func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return err
 	}
-
-	relname, err := filepath.Rel("", templateBox.Path)
+	relname, err := filepath.Rel("", "bless_deploy.cfg")
 	if err != nil {
 		return err
 	}
+
+	fh.Name = filepath.ToSlash(relname)
+	fh.Method = zip.Deflate
 
 	t, err := template.New("config").Parse(string(tplBytes))
 	if err != nil {
 		return errors.Wrap(err, "could not load template")
 	}
 
+	w, err := writer.CreateHeader(fh)
+	if err != nil {
+		return err
+	}
+
+	blessConfig := blessConfig{
+		EncryptedPassword:   d.Get(schemaEncryptedPassword).(string),
+		EncryptedPrivateKey: d.Get(schemaEncryptedPrivateKey).(string),
+		Name:                d.Get(schemaServiceName).(string),
+		KMSAuthKeyID:        d.Get(schemaKmsKeyID).(string),
+	}
+	err = t.Execute(w, blessConfig)
+	if err != nil {
+		return err
+	}
+
+	fileHash, err := util.HashFileForState(outFile.Name())
+	if err != nil {
+		return err
+	}
+
 	d.Set(SchemaOutputPath, outFile.Name())
-	d.SetId(util.HashForState(outFile.Name()))
+	d.Set(schemaOutputBase64Sha256, fileHash)
+	d.SetId(fileHash)
 	return err
 }
