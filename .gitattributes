@@ -1,1 +1,2 @@
-bless_lambda/bless_ca/* linguist-vendored
+# exclude from diffs
+bless_lambda/bless_ca/* linguist-generated
