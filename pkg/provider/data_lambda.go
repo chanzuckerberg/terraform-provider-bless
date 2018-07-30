@@ -2,8 +2,11 @@ package provider
 
 import (
 	"archive/zip"
+	"bytes"
 	"html/template"
+	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -14,10 +17,13 @@ import (
 )
 
 const (
+	schemaServiceName  = "service_name"
+	schemaKMSAuthKeyID = "kmsauth_key_id"
+
+	// SchemaOutputBase64Sha256 is the base64 encoded sha256 of bless.zip contents
+	SchemaOutputBase64Sha256 = "output_base64sha256"
 	// SchemaOutputPath is the output_path of the zip
-	SchemaOutputPath         = "output_path"
-	schemaServiceName        = "service_name"
-	schemaOutputBase64Sha256 = "output_base64sha256"
+	SchemaOutputPath = "output_path"
 )
 
 // Lambda is a bless lambda resource
@@ -45,6 +51,12 @@ func Lambda() *schema.Resource {
 				Description: "The name of the bless CA service. Used for kmsauth.",
 				ForceNew:    true,
 			},
+			schemaKMSAuthKeyID: &schema.Schema{
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "The kmsauth key ID",
+				ForceNew:    true,
+			},
 
 			// computed
 			SchemaOutputPath: &schema.Schema{
@@ -52,7 +64,7 @@ func Lambda() *schema.Resource {
 				Computed:    true,
 				Description: "Temporary directory that holds the bless zip",
 			},
-			schemaOutputBase64Sha256: &schema.Schema{
+			SchemaOutputBase64Sha256: &schema.Schema{
 				Type:        schema.TypeString,
 				Computed:    true,
 				Description: "Base64Sha256 or temporary bless.zip contents",
@@ -81,6 +93,57 @@ func newResourceLambda() *resourceLambda {
 	return &resourceLambda{}
 }
 
+func (l *resourceLambda) writeFileToZip(f io.Reader, fileInfo os.FileInfo, writer *zip.Writer, path string,
+) error {
+	relativeName, err := filepath.Rel("", path)
+	if err != nil {
+		return errors.Wrapf(err, "Could not create relative path %s for zip", path)
+	}
+	fh, err := zip.FileInfoHeader(fileInfo)
+	if err != nil {
+		return errors.Wrapf(err, "Could not create zip file header for %s", relativeName)
+	}
+	fh.Name = filepath.ToSlash(relativeName)
+	fh.Method = zip.Deflate
+	fh.SetModTime(time.Time{})
+	w, err := writer.CreateHeader(fh)
+	if err != nil {
+		return errors.Wrapf(err, "Could not create zip writer for %s", relativeName)
+	}
+	_, err = io.Copy(w, f)
+	return errors.Wrapf(err, "Could not add file %s to zip", relativeName)
+}
+
+// getBlessConfig reads and templetizes a bless config
+func (l *resourceLambda) getBlessConfig(d *schema.ResourceData) (io.Reader, os.FileInfo, error) {
+	templateBox := packr.NewBox("../../bless_lambda/bless_deploy.cfg.tpl")
+	tpl, err := templateBox.Open("")
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Could not open pckr box for bless_cfg.tpl")
+	}
+	tplBytes, err := ioutil.ReadAll(tpl)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Could not read bless_cfg.tpl")
+	}
+	fileInfo, err := tpl.Stat()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Could not stat bless_cfg.tpl")
+	}
+	t, err := template.New("config").Parse(string(tplBytes))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Could not load template")
+	}
+	blessConfig := blessConfig{
+		EncryptedPassword:   d.Get(schemaEncryptedPassword).(string),
+		EncryptedPrivateKey: d.Get(schemaEncryptedPrivateKey).(string),
+		Name:                d.Get(schemaServiceName).(string),
+		KMSAuthKeyID:        d.Get(schemaKMSAuthKeyID).(string),
+	}
+	buff := bytes.NewBuffer(nil)
+	err = t.Execute(buff, blessConfig)
+	return buff, fileInfo, errors.Wrap(err, "Could not templetize config")
+}
+
 // Create bundles the lambda code and configuration into a zip that can be uploaded to AWS lambda
 func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 	outFile, err := ioutil.TempFile("", "bless.zip")
@@ -91,96 +154,35 @@ func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 	writer := zip.NewWriter(outFile)
 	defer writer.Close()
 
+	// Add all the python lambda files to the zip
 	zipBox := packr.NewBox("../../bless_lambda/bless_ca")
 	err = zipBox.Walk(func(path string, f packr.File) error {
-		relname, err := filepath.Rel("", path)
-		if err != nil {
-			return err
-		}
 		fileInfo, err := f.FileInfo()
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "Could not get file info for %s", path)
 		}
-		fh, err := zip.FileInfoHeader(fileInfo)
-		if err != nil {
-			return err
-		}
-		fh.Name = filepath.ToSlash(relname)
-		fh.Method = zip.Deflate
-		// fh.Modified alone isn't enough when using a zero value
-		fh.SetModTime(time.Time{})
-
-		w, err := writer.CreateHeader(fh)
-		if err != nil {
-			return err
-		}
-
-		contents, err := ioutil.ReadAll(f)
-		if err != nil {
-			return err
-		}
-		_, err = w.Write(contents)
-		if err != nil {
-			return err
-		}
-		return nil
+		return l.writeFileToZip(f, fileInfo, writer, path)
 	})
 
-	// Templ config
-	templateBox := packr.NewBox("../../bless_lambda/bless_deploy.cfg.tpl")
-	tpl, err := templateBox.Open("")
-	if err != nil {
-		return err
-	}
-	tplBytes, err := ioutil.ReadAll(tpl)
-	if err != nil {
-		return err
-	}
-	fileInfo, err := tpl.Stat()
+	blessConfig, blessConfigFileInfo, err := l.getBlessConfig(d)
 	if err != nil {
 		return err
 	}
 
-	fh, err := zip.FileInfoHeader(fileInfo)
-	if err != nil {
-		return err
-	}
-	relname, err := filepath.Rel("", "bless_deploy.cfg")
-	if err != nil {
-		return err
-	}
-
-	fh.Name = filepath.ToSlash(relname)
-	fh.Method = zip.Deflate
-
-	t, err := template.New("config").Parse(string(tplBytes))
-	if err != nil {
-		return errors.Wrap(err, "could not load template")
-	}
-
-	w, err := writer.CreateHeader(fh)
+	// Write the config
+	err = l.writeFileToZip(blessConfig, blessConfigFileInfo, writer, "bless_deploy.cfg")
 	if err != nil {
 		return err
 	}
 
-	blessConfig := blessConfig{
-		EncryptedPassword:   d.Get(schemaEncryptedPassword).(string),
-		EncryptedPrivateKey: d.Get(schemaEncryptedPrivateKey).(string),
-		Name:                d.Get(schemaServiceName).(string),
-		KMSAuthKeyID:        d.Get(schemaKmsKeyID).(string),
-	}
-	err = t.Execute(w, blessConfig)
-	if err != nil {
-		return err
-	}
-
+	// Calculate file hash for tf state
 	fileHash, err := util.HashFileForState(outFile.Name())
 	if err != nil {
 		return err
 	}
 
 	d.Set(SchemaOutputPath, outFile.Name())
-	d.Set(schemaOutputBase64Sha256, fileHash)
+	d.Set(SchemaOutputBase64Sha256, fileHash)
 	d.SetId(fileHash)
 	return err
 }
