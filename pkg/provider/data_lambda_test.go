@@ -35,7 +35,7 @@ func TestLambdaCreate(t *testing.T) {
 					value = "${data.bless_lambda.zip.output_path}"
 				}
 
-				output "base64sha256" {
+				output "output_base64sha256" {
 					value = "${data.bless_lambda.zip.output_base64sha256}"
 				}
 				`,
