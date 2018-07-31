@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: kmsauth
+Version: 0.3.0
+Summary: A python library for reusing KMS for your own authentication and authorization.
+Home-page: https://github.com/lyft/python-kmsauth
+Author: Ryan Lane
+Author-email: rlane@lyft.com
+License: apache2
+Platform: UNKNOWN
+Requires-Dist: boto3 (<2.0.0,>=1.2.0)
+
+UNKNOWN
+
+
