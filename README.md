@@ -16,7 +16,7 @@ provider "bless" {
   profile = "<aws_profile>"
 }
 
-resource "bless" "example" {
+resource "bless_ca" "example" {
   kms_key_id = "<kms_key_id>"
 }
 
