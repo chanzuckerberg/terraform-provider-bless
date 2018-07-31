@@ -22,8 +22,8 @@ const (
 
 	// SchemaOutputBase64Sha256 is the base64 encoded sha256 of bless.zip contents
 	SchemaOutputBase64Sha256 = "output_base64sha256"
-	// SchemaOutputPath is the output_path of the zip
-	SchemaOutputPath = "output_path"
+	// schemaOutputPath is the output_path of the zip
+	schemaOutputPath = "output_path"
 )
 
 // Lambda is a bless lambda resource
@@ -57,10 +57,10 @@ func Lambda() *schema.Resource {
 				Description: "The kmsauth key ID",
 				ForceNew:    true,
 			},
-			SchemaOutputPath: &schema.Schema{
+			schemaOutputPath: &schema.Schema{
 				Type:        schema.TypeString,
 				Required:    true,
-				Description: "Temporary directory that holds the bless zip",
+				Description: "Path where the bless zip archive will be written",
 				ForceNew:    true,
 			},
 
@@ -147,7 +147,7 @@ func (l *resourceLambda) getBlessConfig(d *schema.ResourceData) (io.Reader, os.F
 
 // Create bundles the lambda code and configuration into a zip that can be uploaded to AWS lambda
 func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
-	path:= d.Get(SchemaOutputPath).(string)
+	path := d.Get(schemaOutputPath).(string)
 	outFile, err := os.Create(path)
 	if err != nil {
 		return errors.Wrapf(err, "Could not open output file at %s", path)
