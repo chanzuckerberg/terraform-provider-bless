@@ -64,10 +64,11 @@ data "bless_lambda" "code" {
   encrypted_ca = "${bless_ca.example}"
   service_name = "my-bless-example" # give this CA a name
   kmsauth_key_id = "<kmsauth_key_id>"
+  output_path = "${path.module}/bless.zip"
 }
 
 resource "aws_lambda_function" "bless" {
-  filename = "${data.bless_lambda.code.output_path}"
+  filename = "${path.module}/bless.zip"
   source_code_hash = "${data.bless_lambda.code.output_base64sha256}"
 
   ...
