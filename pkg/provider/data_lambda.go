@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	"path"
 
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/util"
 	"github.com/gobuffalo/packr"
@@ -145,12 +146,21 @@ func (l *resourceLambda) getBlessConfig(d *schema.ResourceData) (io.Reader, os.F
 	return buff, fileInfo, errors.Wrap(err, "Could not templetize config")
 }
 
-// Create bundles the lambda code and configuration into a zip that can be uploaded to AWS lambda
-func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
-	path := d.Get(schemaOutputPath).(string)
-	outFile, err := os.Create(path)
+// archive generates the zip archive
+func (l *resourceLambda) archive(d *schema.ResourceData, meta interface{}) error {
+	outputPath := d.Get(schemaOutputPath).(string)
+	outputDirectory := path.Dir(outputPath)
+	if outputDirectory != "" {
+		if _, err := os.Stat(outputDirectory); err != nil {
+			if err := os.MkdirAll(outputDirectory, 0755); err != nil {
+				return errors.Wrapf(err, "Could not create directories %s", outputDirectory)
+			}
+		}
+	}
+
+	outFile, err := os.Create(outputPath)
 	if err != nil {
-		return errors.Wrapf(err, "Could not open output file at %s", path)
+		return errors.Wrapf(err, "Could not open output file at %s", outputPath)
 	}
 	defer outFile.Close()
 	writer := zip.NewWriter(outFile)
@@ -171,17 +181,21 @@ func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 	// Write the config
-	err = l.writeFileToZip(blessConfig, blessConfigFileInfo, writer, "bless_deploy.cfg")
+	return l.writeFileToZip(blessConfig, blessConfigFileInfo, writer, "bless_deploy.cfg")
+}
+
+// Create bundles the lambda code and configuration into a zip that can be uploaded to AWS lambda
+func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
+	outputPath := d.Get(schemaOutputPath).(string)
+	err := l.archive(d, meta)
 	if err != nil {
 		return err
 	}
-
 	// Calculate file hash for tf state
-	fileHash, err := util.HashFileForState(outFile.Name())
+	fileHash, err := util.HashFileForState(outputPath)
 	if err != nil {
 		return err
 	}
-
 	d.Set(SchemaOutputBase64Sha256, fileHash)
 	d.SetId(fileHash)
 	return err
