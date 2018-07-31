@@ -22,8 +22,8 @@ const (
 
 	// SchemaOutputBase64Sha256 is the base64 encoded sha256 of bless.zip contents
 	SchemaOutputBase64Sha256 = "output_base64sha256"
-	// SchemaOutputPath is the output_path of the zip
-	SchemaOutputPath = "output_path"
+	// schemaOutputPath is the output_path of the zip
+	schemaOutputPath = "output_path"
 )
 
 // Lambda is a bless lambda resource
@@ -57,13 +57,14 @@ func Lambda() *schema.Resource {
 				Description: "The kmsauth key ID",
 				ForceNew:    true,
 			},
+			schemaOutputPath: &schema.Schema{
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "Path where the bless zip archive will be written",
+				ForceNew:    true,
+			},
 
 			// computed
-			SchemaOutputPath: &schema.Schema{
-				Type:        schema.TypeString,
-				Computed:    true,
-				Description: "Temporary directory that holds the bless zip",
-			},
 			SchemaOutputBase64Sha256: &schema.Schema{
 				Type:        schema.TypeString,
 				Computed:    true,
@@ -146,9 +147,10 @@ func (l *resourceLambda) getBlessConfig(d *schema.ResourceData) (io.Reader, os.F
 
 // Create bundles the lambda code and configuration into a zip that can be uploaded to AWS lambda
 func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
-	outFile, err := ioutil.TempFile("", "bless.zip")
+	path := d.Get(schemaOutputPath).(string)
+	outFile, err := os.Create(path)
 	if err != nil {
-		return errors.Wrap(err, "Could not open temporary file")
+		return errors.Wrapf(err, "Could not open output file at %s", path)
 	}
 	defer outFile.Close()
 	writer := zip.NewWriter(outFile)
@@ -168,7 +170,6 @@ func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return err
 	}
-
 	// Write the config
 	err = l.writeFileToZip(blessConfig, blessConfigFileInfo, writer, "bless_deploy.cfg")
 	if err != nil {
@@ -181,7 +182,6 @@ func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	d.Set(SchemaOutputPath, outFile.Name())
 	d.Set(SchemaOutputBase64Sha256, fileHash)
 	d.SetId(fileHash)
 	return err
