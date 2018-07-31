@@ -28,7 +28,7 @@ func TestLambdaCreate(t *testing.T) {
 					encrypted_password = "bbbb"
 					service_name = "test"
 					kmsauth_key_id = "keyID"
-					output_path = "/tmp/test"
+					output_path = "/tmp/test.zip"
 				}
 
 				output "output_base64sha256" {
