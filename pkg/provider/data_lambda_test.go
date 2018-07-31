@@ -45,7 +45,6 @@ func TestLambdaCreate(t *testing.T) {
 				output "output_2" {
 					value = "${data.bless_lambda.zip2.output_base64sha256}"
 				}
-
 				`,
 				Check: func(s *terraform.State) error {
 					output1:= s.RootModule().Outputs["output"].Value
