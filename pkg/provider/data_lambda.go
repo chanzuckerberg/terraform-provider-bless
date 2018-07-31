@@ -116,18 +116,18 @@ func (l *resourceLambda) writeFileToZip(f io.Reader, fileInfo os.FileInfo, write
 
 // getBlessConfig reads and templetizes a bless config
 func (l *resourceLambda) getBlessConfig(d *schema.ResourceData) (io.Reader, os.FileInfo, error) {
-	templateBox := packr.NewBox("../../bless_lambda/bless_deploy.cfg.tpl")
-	tpl, err := templateBox.Open("")
+	templateBox := packr.NewBox("../../bless_lambda")
+	tpl, err := templateBox.Open("bless_deploy.cfg.tpl")
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "Could not open pckr box for bless_cfg.tpl")
+		return nil, nil, errors.Wrap(err, "Could not open pckr box for bless_deploy.cfg.tpl")
 	}
 	tplBytes, err := ioutil.ReadAll(tpl)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "Could not read bless_cfg.tpl")
+		return nil, nil, errors.Wrap(err, "Could not read bless_deploy.cfg.tpl")
 	}
 	fileInfo, err := tpl.Stat()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "Could not stat bless_cfg.tpl")
+		return nil, nil, errors.Wrap(err, "Could not stat bless_deploy.cfg.tpl")
 	}
 	t, err := template.New("config").Parse(string(tplBytes))
 	if err != nil {
