@@ -187,12 +187,15 @@ func (l *resourceLambda) archive(d *schema.ResourceData, meta interface{}) error
 // Create bundles the lambda code and configuration into a zip that can be uploaded to AWS lambda
 func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 	outputPath := d.Get(schemaOutputPath).(string)
+	err := l.archive(d, meta)
+	if err != nil {
+		return err
+	}
 	// Calculate file hash for tf state
 	fileHash, err := util.HashFileForState(outputPath)
 	if err != nil {
 		return err
 	}
-
 	d.Set(SchemaOutputBase64Sha256, fileHash)
 	d.SetId(fileHash)
 	return err
