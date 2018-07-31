@@ -8,6 +8,6 @@ packr:
 	packr
 
 release: packr
-	./release
+	goreleaser release --rm-dist
 
 .PHONY: build test packr release
