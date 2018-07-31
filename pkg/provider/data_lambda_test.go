@@ -28,11 +28,7 @@ func TestLambdaCreate(t *testing.T) {
 					encrypted_password = "bbbb"
 					service_name = "test"
 					kmsauth_key_id = "keyID"
-
-				}
-
-				output "output_path" {
-					value = "${data.bless_lambda.zip.output_path}"
+					output_path = "/tmp/test"
 				}
 
 				output "output_base64sha256" {
@@ -40,12 +36,11 @@ func TestLambdaCreate(t *testing.T) {
 				}
 				`,
 				Check: func(s *terraform.State) error {
-					outputPath := s.RootModule().Outputs[provider.SchemaOutputPath].Value
 					base64sha256 := s.RootModule().Outputs[provider.SchemaOutputBase64Sha256].Value
-					a.NotEmpty(outputPath)
 					a.NotEmpty(base64sha256)
 					return nil
 				},
+				Destroy: true,
 			},
 		},
 	})
