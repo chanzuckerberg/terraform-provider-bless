@@ -15,3 +15,5 @@ use_kmsauth = True
 kmsauth_key_id = {{ .KMSAuthKeyID }}
 kmsauth_serviceid = {{ .Name }}
 kmsauth_remote_usernames_allowed = *
+kmsauth_validate_remote_usernames_against_iam_groups = True
+kmsauth_iam_group_name_format = ssh-{}
