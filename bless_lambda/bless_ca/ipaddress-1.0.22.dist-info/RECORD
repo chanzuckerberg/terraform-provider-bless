@@ -5,4 +5,4 @@ ipaddress-1.0.22.dist-info/RECORD,,
 ipaddress-1.0.22.dist-info/WHEEL,sha256=J3CsTk7Mf2JNUyhImI-mjX-fmI4oDjyiXgWT4qgZiCE,110
 ipaddress-1.0.22.dist-info/top_level.txt,sha256=2eNV5koVDCuB7hG17Yfh-lkL6iQnSpnQcr9cmsEx2DU,10
 ipaddress-1.0.22.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
-ipaddress.pyc,,
+__pycache__/ipaddress.cpython-36.pyc,,
