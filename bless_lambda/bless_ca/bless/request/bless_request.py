@@ -12,7 +12,8 @@ from marshmallow import validates
 from marshmallow.validate import Email
 
 from bless.config.bless_config import USERNAME_VALIDATION_OPTION, REMOTE_USERNAMES_VALIDATION_OPTION, \
-    USERNAME_VALIDATION_DEFAULT, REMOTE_USERNAMES_VALIDATION_DEFAULT
+    USERNAME_VALIDATION_DEFAULT, REMOTE_USERNAMES_VALIDATION_DEFAULT, REMOTE_USERNAMES_BLACKLIST_OPTION, \
+    REMOTE_USERNAMES_BLACKLIST_DEFAULT
 
 # man 8 useradd
 USERNAME_PATTERN = re.compile('[a-z_][a-z0-9_-]*[$]?\Z')
@@ -29,12 +30,13 @@ USERNAME_PATTERN_DEBIAN = re.compile('\A[^-+~][^:,\s]*\Z')
 # There doesn't seem to be any practical size limits of an SSH Certificate Principal (> 4096B allowed).
 PRINCIPAL_PATTERN = re.compile(r'[\d\w!"$%&\'()*+\-./:;<=>?@\[\\\]\^`{|}~]+\Z')
 VALID_SSH_RSA_PUBLIC_KEY_HEADER = "ssh-rsa AAAAB3NzaC1yc2"
+VALID_SSH_ED25519_PUBLIC_KEY_HEADER = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5"
 
 USERNAME_VALIDATION_OPTIONS = Enum('UserNameValidationOptions',
                                    'useradd '  # Allowable usernames per 'man 8 useradd'
                                    'debian '  # Allowable usernames on debian systems.
                                    'email '  # username is a valid email address.
-                                   'principal '  # SSH Certificate Principal.  See 'man 5 sshd_con#  fig'.
+                                   'principal '  # SSH Certificate Principal.  See 'man 5 sshd_config'.
                                    'disabled')  # no additional validation of the string.
 
 
@@ -46,7 +48,11 @@ def validate_ips(ips):
         raise ValidationError('Invalid IP address.')
 
 
-def validate_user(user, username_validation):
+def validate_user(user, username_validation, username_blacklist=None):
+    if username_blacklist:
+        if re.match(username_blacklist, user) is not None:
+            raise ValidationError('Username contains invalid characters.')
+
     if username_validation == USERNAME_VALIDATION_OPTIONS.disabled:
         return
     elif username_validation == USERNAME_VALIDATION_OPTIONS.email:
@@ -79,7 +85,7 @@ def _validate_principal(principal):
 
 
 def validate_ssh_public_key(public_key):
-    if public_key.startswith(VALID_SSH_RSA_PUBLIC_KEY_HEADER):
+    if public_key.startswith(VALID_SSH_RSA_PUBLIC_KEY_HEADER) or public_key.startswith(VALID_SSH_ED25519_PUBLIC_KEY_HEADER):
         pass
     # todo other key types
     else:
@@ -119,8 +125,12 @@ class BlessSchema(Schema):
             username_validation = USERNAME_VALIDATION_OPTIONS[self.context[REMOTE_USERNAMES_VALIDATION_OPTION]]
         else:
             username_validation = USERNAME_VALIDATION_OPTIONS[REMOTE_USERNAMES_VALIDATION_DEFAULT]
+        if REMOTE_USERNAMES_BLACKLIST_OPTION in self.context:
+            username_blacklist = self.context[REMOTE_USERNAMES_BLACKLIST_OPTION]
+        else:
+            username_blacklist = REMOTE_USERNAMES_BLACKLIST_DEFAULT
         for remote_username in remote_usernames.split(','):
-            validate_user(remote_username, username_validation)
+            validate_user(remote_username, username_validation, username_blacklist)
 
 
 class BlessRequest:
