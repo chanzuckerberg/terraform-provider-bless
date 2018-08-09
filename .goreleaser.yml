@@ -1,5 +1,5 @@
 builds:
-  - binary: terraform-provider-bless
+  - binary: "terraform-provider-bless-{{ .Tag }}"
     env:
       - CGO_ENABLED=0
     goos:
