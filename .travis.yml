@@ -1,6 +1,7 @@
 dist: trusty
 language: go
-
+install:
+- go get -u github.com/gobuffalo/packr/...
 jobs:
   include:
     - stage: test
