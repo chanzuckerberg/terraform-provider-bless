@@ -3,13 +3,13 @@ package provider
 import (
 	"archive/zip"
 	"bytes"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
+	"text/template"
 
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/util"
 	"github.com/gobuffalo/packr"
@@ -189,13 +189,13 @@ func (l *resourceLambda) getBlessConfig(d *schema.ResourceData) (io.Reader, erro
 		return nil, errors.Wrap(err, "Could not load template")
 	}
 	blessConfig := blessConfig{
-		Name:                                          d.Get(schemaServiceName).(string),
-		LoggingLevel:                                  d.Get(schemaLoggingLevel).(string),
-		UsernameValidation:                            d.Get(schemaUsernameValidation).(string),
-		EncryptedPassword:                             d.Get(schemaEncryptedPassword).(string),
-		EncryptedPrivateKey:                           d.Get(schemaEncryptedPrivateKey).(string),
-		KMSAuthKeyID:                                  d.Get(schemaKMSAuthKeyID).(string),
-		KMSAuthRemoteUsernamesAllowed:                 d.Get(schemaKMSAuthRemoteUsernamesAllowed).(string),
+		Name:                          d.Get(schemaServiceName).(string),
+		LoggingLevel:                  d.Get(schemaLoggingLevel).(string),
+		UsernameValidation:            d.Get(schemaUsernameValidation).(string),
+		EncryptedPassword:             d.Get(schemaEncryptedPassword).(string),
+		EncryptedPrivateKey:           d.Get(schemaEncryptedPrivateKey).(string),
+		KMSAuthKeyID:                  d.Get(schemaKMSAuthKeyID).(string),
+		KMSAuthRemoteUsernamesAllowed: d.Get(schemaKMSAuthRemoteUsernamesAllowed).(string),
 		KMSAuthValidateRemoteUsernameAgainstIAMGroups: d.Get(schemaKMSAuthValidateRemoteUsernameAgainstIAMGroups).(bool),
 		KMSAuthIAMGroupNameFormat:                     d.Get(schemaKMSAuthIAMGroupNameFormat).(string),
 	}
