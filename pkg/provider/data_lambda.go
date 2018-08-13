@@ -3,13 +3,13 @@ package provider
 import (
 	"archive/zip"
 	"bytes"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
-	"sort"
-	"path/filepath"
 	"path"
+	"path/filepath"
+	"sort"
+	"text/template"
 
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/util"
 	"github.com/gobuffalo/packr"
@@ -161,7 +161,7 @@ func (l *resourceLambda) archive(d *schema.ResourceData, meta interface{}) error
 	// Add all the python lambda files to the zip
 	zipBox := packr.NewBox("../../bless_lambda/bless_ca")
 	// HACK: zipBox.Walk does not guarantee a stable iteration order
-	files:= []string{}
+	files := []string{}
 	err = zipBox.Walk(func(path string, f packr.File) error {
 		fileInfo, err := f.FileInfo()
 		if err != nil {
