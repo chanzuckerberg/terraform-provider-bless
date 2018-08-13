@@ -1,11 +1,13 @@
 Metadata-Version: 2.1
 Name: marshmallow
-Version: 2.15.3
+Version: 2.15.4
 Summary: A lightweight library for converting complex datatypes to and from native Python datatypes.
 Home-page: https://github.com/marshmallow-code/marshmallow
 Author: Steven Loria
 Author-email: sloria1@gmail.com
 License: MIT
+Project-URL: Bug Reports, https://github.com/marshmallow-code/marshmallow/issues
+Project-URL: Funding, https://opencollective.com/marshmallow
 Keywords: serialization,rest,json,api,marshal,marshalling,deserialization,validation,schema
 Platform: UNKNOWN
 Classifier: Development Status :: 5 - Production/Stable
