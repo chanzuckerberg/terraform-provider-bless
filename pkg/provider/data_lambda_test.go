@@ -62,6 +62,48 @@ func TestLambdaCreate(t *testing.T) {
 				},
 				Destroy: true,
 			},
+			r.TestStep{
+				Config: `
+				provider "bless" {
+					region = "us-east-1"
+				}
+
+				data "bless_lambda" "zip" {
+					encrypted_ca = "aaaa"
+					encrypted_password = "bbbb"
+					service_name = "test"
+					kmsauth_key_id = "keyID"
+					output_path = "/tmp/test3.zip"
+				}
+
+				data "bless_lambda" "zip2" {
+					encrypted_ca = "aaaa"
+					encrypted_password = "bbbb"
+					service_name = "test"
+					kmsauth_key_id = "keyID"
+					output_path = "/tmp/test4.zip"
+					kmsauth_validate_remote_user = "false" # setting different field here
+				}
+
+
+				output "output" {
+					value = "${data.bless_lambda.zip.output_base64sha256}"
+				}
+				output "output_2" {
+					value = "${data.bless_lambda.zip2.output_base64sha256}"
+				}
+				`,
+				Check: func(s *terraform.State) error {
+					output1 := s.RootModule().Outputs["output"].Value
+					output2 := s.RootModule().Outputs["output_2"].Value
+					a.NotEmpty(output1)
+					a.NotEmpty(output2)
+					// Check hashes are equal
+					a.NotEqual(output1, output2)
+					return nil
+				},
+				Destroy: true,
+			},
 		},
 	})
 }

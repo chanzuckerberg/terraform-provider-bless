@@ -18,8 +18,13 @@ import (
 )
 
 const (
-	schemaServiceName  = "service_name"
-	schemaKMSAuthKeyID = "kmsauth_key_id"
+	schemaServiceName                                   = "service_name"
+	schemaLoggingLevel                                  = "logging_level"
+	schemaUsernameValidation                            = "username_validation"
+	schemaKMSAuthKeyID                                  = "kmsauth_key_id"
+	schemaKMSAuthRemoteUsernamesAllowed                 = "kmsauth_remote_usernames_allowed"
+	schemaKMSAuthValidateRemoteUsernameAgainstIAMGroups = "kmsauth_validate_remote_user"
+	schemaKMSAuthIAMGroupNameFormat                     = "kmsauth_iam_group_name_format"
 
 	// SchemaOutputBase64Sha256 is the base64 encoded sha256 of bless.zip contents
 	SchemaOutputBase64Sha256 = "output_base64sha256"
@@ -64,6 +69,41 @@ func Lambda() *schema.Resource {
 				Description: "Path where the bless zip archive will be written",
 				ForceNew:    true,
 			},
+			schemaLoggingLevel: &schema.Schema{
+				Type:        schema.TypeString,
+				Default:     "INFO",
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Bless lambda logging level",
+			},
+			schemaUsernameValidation: &schema.Schema{
+				Type:        schema.TypeString,
+				Default:     "email",
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Bless lambda default username validation",
+			},
+			schemaKMSAuthRemoteUsernamesAllowed: &schema.Schema{
+				Type:        schema.TypeString,
+				Default:     "*",
+				Optional:    true,
+				ForceNew:    true,
+				Description: "The remote usernames allowed. \"*\" indicates any",
+			},
+			schemaKMSAuthValidateRemoteUsernameAgainstIAMGroups: &schema.Schema{
+				Type:        schema.TypeBool,
+				Default:     true,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "If bless should validate a remote username against an IAM group membership",
+			},
+			schemaKMSAuthIAMGroupNameFormat: &schema.Schema{
+				Type:        schema.TypeString,
+				Default:     "ssh-{}",
+				Optional:    true,
+				ForceNew:    true,
+				Description: "The format of IAM Group Name used to validate membership.",
+			},
 
 			// computed
 			SchemaOutputBase64Sha256: &schema.Schema{
@@ -78,14 +118,24 @@ func Lambda() *schema.Resource {
 
 //
 type blessConfig struct {
+	// Name is the name of this service
+	Name string
+	// LoggingLevel
+	LoggingLevel string
+	// UsernameValidation tells bless how to validate usernames
+	UsernameValidation string
 	// EncryptedPassword is the kms encrypted password for the CA private key
 	EncryptedPassword string
 	// EncryptedPrivateKey is a password encrypted CA private key
 	EncryptedPrivateKey string
-	// Name is the name of this service
-	Name string
-	// KMSAuthKeyID is the kmsauth key ID
+	// KMSAuthKeyID the kmsauth kms key id
 	KMSAuthKeyID string
+	// KMSAuthRemoteUsernamesAllowed the remote usernames allowed
+	KMSAuthRemoteUsernamesAllowed string
+	// KMSAuthValidateRemoteUsernameAgainstIAMGroups if kmsauth should validate the remote username against an IAM group membership
+	KMSAuthValidateRemoteUsernameAgainstIAMGroups bool
+	// KMSAuthIAMGroupNameFormat a pattern to fetch iam groups typically ssh-{} where {} will be replaced with the remote-username
+	KMSAuthIAMGroupNameFormat string
 }
 
 // resourceLambda is a namespace
@@ -123,16 +173,33 @@ func (l *resourceLambda) getBlessConfig(d *schema.ResourceData) (io.Reader, erro
 	if err != nil {
 		return nil, errors.Wrap(err, "Could not read bless_deploy.cfg.tpl")
 	}
-	t, err := template.New("config").Parse(string(tplBytes))
+	t, err := template.
+		New("config").
+		Funcs(map[string]interface{}{
+			"pythonBool": func(isTrue bool) string {
+				if isTrue {
+					return "True"
+				}
+				return "False"
+			},
+		}).
+		Parse(string(tplBytes))
+
 	if err != nil {
 		return nil, errors.Wrap(err, "Could not load template")
 	}
 	blessConfig := blessConfig{
-		EncryptedPassword:   d.Get(schemaEncryptedPassword).(string),
-		EncryptedPrivateKey: d.Get(schemaEncryptedPrivateKey).(string),
-		Name:                d.Get(schemaServiceName).(string),
-		KMSAuthKeyID:        d.Get(schemaKMSAuthKeyID).(string),
+		Name:                          d.Get(schemaServiceName).(string),
+		LoggingLevel:                  d.Get(schemaLoggingLevel).(string),
+		UsernameValidation:            d.Get(schemaUsernameValidation).(string),
+		EncryptedPassword:             d.Get(schemaEncryptedPassword).(string),
+		EncryptedPrivateKey:           d.Get(schemaEncryptedPrivateKey).(string),
+		KMSAuthKeyID:                  d.Get(schemaKMSAuthKeyID).(string),
+		KMSAuthRemoteUsernamesAllowed: d.Get(schemaKMSAuthRemoteUsernamesAllowed).(string),
+		KMSAuthValidateRemoteUsernameAgainstIAMGroups: d.Get(schemaKMSAuthValidateRemoteUsernameAgainstIAMGroups).(bool),
+		KMSAuthIAMGroupNameFormat:                     d.Get(schemaKMSAuthIAMGroupNameFormat).(string),
 	}
+
 	buff := bytes.NewBuffer(nil)
 	err = t.Execute(buff, blessConfig)
 	return buff, errors.Wrap(err, "Could not templetize config")
@@ -191,6 +258,7 @@ func (l *resourceLambda) archive(d *schema.ResourceData, meta interface{}) error
 	if err != nil {
 		return err
 	}
+
 	// Write the config
 	return l.writeFileToZip(blessConfig, writer, "bless_deploy.cfg")
 }
