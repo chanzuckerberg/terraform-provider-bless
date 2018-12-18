@@ -17,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -69,7 +68,6 @@ func NewCA(privateKey crypto.PrivateKey, publicKey interface{}, passwordBytes ui
 
 	switch typed := privateKey.(type) {
 	case *ecdsa.PrivateKey:
-		logrus.Warn("HERE")
 		block.Type = "EC PRIVATE KEY"
 		bytes, err := x509.MarshalECPrivateKey(typed)
 		if err != nil {
