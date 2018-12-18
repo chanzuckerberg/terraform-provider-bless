@@ -25,6 +25,7 @@ const (
 	schemaKMSAuthRemoteUsernamesAllowed                 = "kmsauth_remote_usernames_allowed"
 	schemaKMSAuthValidateRemoteUsernameAgainstIAMGroups = "kmsauth_validate_remote_user"
 	schemaKMSAuthIAMGroupNameFormat                     = "kmsauth_iam_group_name_format"
+	schemaValiditySeconds 															= "validity_seconds"
 
 	// SchemaOutputBase64Sha256 is the base64 encoded sha256 of bless.zip contents
 	SchemaOutputBase64Sha256 = "output_base64sha256"
@@ -103,6 +104,13 @@ func Lambda() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: "The format of IAM Group Name used to validate membership.",
+			},
+			schemaValiditySeconds: &schema.Schema{
+				Type: schema.TypeInt,
+				Default: 3600,
+				Optional: true,
+				ForceNew: true,
+				Description: "Cert validity time window.",
 			},
 
 			// computed

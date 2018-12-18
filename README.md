@@ -70,7 +70,6 @@ data "bless_lambda" "code" {
 resource "aws_lambda_function" "bless" {
   filename = "${path.module}/bless.zip"
   source_code_hash = "${data.bless_lambda.code.output_base64sha256}"
-
   ...
 }
 ```
