@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/service/kms/kmsiface"
-
 	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/aws"
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/provider"

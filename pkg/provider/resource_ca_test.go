@@ -56,6 +56,9 @@ func TestCreate(t *testing.T) {
 					a.Regexp(
 						regexp.MustCompile("^-----BEGIN RSA PRIVATE KEY-----"),
 						string(bytesPrivate))
+					a.Regexp(
+						regexp.MustCompile(`AES-256-CBC`),
+						string(bytesPrivate))
 
 					publicSSHUntyped := s.RootModule().Outputs["public_key"].Value
 					publicSSH, ok := publicSSHUntyped.(string)
