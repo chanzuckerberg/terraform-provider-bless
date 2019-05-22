@@ -92,6 +92,7 @@
     }
   },
   "shapes":{
+    "CopyTags":{"type":"boolean"},
     "Count":{
       "type":"integer",
       "max":1000,
@@ -120,7 +121,7 @@
         },
         "PolicyDetails":{
           "shape":"PolicyDetails",
-          "documentation":"<p>The configuration of the lifecycle policy.</p> <p>Target tags cannot be re-used across lifecycle policies.</p>"
+          "documentation":"<p>The configuration details of the lifecycle policy.</p> <p>Target tags cannot be re-used across lifecycle policies.</p>"
         }
       }
     },
@@ -198,13 +199,13 @@
         },
         "TargetTags":{
           "shape":"TargetTagsFilterList",
-          "documentation":"<p>The target tags.</p> <p>Tags are strings in the format <code>key:value</code>.</p>",
+          "documentation":"<p>The target tag for a policy.</p> <p>Tags are strings in the format <code>key=value</code>.</p>",
           "location":"querystring",
           "locationName":"targetTags"
         },
         "TagsToAdd":{
           "shape":"TagsToAddFilterList",
-          "documentation":"<p>The tags to add to the resources.</p> <p>Tags are strings in the format <code>key:value</code>.</p> <p>These tags are added in addition to the AWS-added lifecycle tags.</p>",
+          "documentation":"<p>The tags to add to objects created by the policy.</p> <p>Tags are strings in the format <code>key=value</code>.</p> <p>These user-defined tags are added in addition to the AWS-added lifecycle tags.</p>",
           "location":"querystring",
           "locationName":"tagsToAdd"
         }
@@ -373,11 +374,11 @@
         },
         "TargetTags":{
           "shape":"TargetTagList",
-          "documentation":"<p>The target tags.</p>"
+          "documentation":"<p>The single tag that identifies targeted resources for this policy.</p>"
         },
         "Schedules":{
           "shape":"ScheduleList",
-          "documentation":"<p>The schedule.</p>"
+          "documentation":"<p>The schedule of policy-defined actions.</p>"
         }
       },
       "documentation":"<p>Specifies the configuration of a lifecycle policy.</p>"
@@ -433,9 +434,10 @@
           "shape":"ScheduleName",
           "documentation":"<p>The name of the schedule.</p>"
         },
+        "CopyTags":{"shape":"CopyTags"},
         "TagsToAdd":{
           "shape":"TagsToAddList",
-          "documentation":"<p>The tags to add to policy-created resources. These tags are added in addition to the default lifecycle tags.</p>"
+          "documentation":"<p>The tags to apply to policy-created resources. These user-defined tags are in addition to the AWS-added lifecycle tags.</p>"
         },
         "CreateRule":{
           "shape":"CreateRule",
@@ -519,7 +521,10 @@
       "member":{"shape":"Time"},
       "max":1
     },
-    "Timestamp":{"type":"timestamp"},
+    "Timestamp":{
+      "type":"timestamp",
+      "timestampFormat":"iso8601"
+    },
     "UpdateLifecyclePolicyRequest":{
       "type":"structure",
       "required":["PolicyId"],
@@ -554,5 +559,5 @@
       }
     }
   },
-  "documentation":"<fullname>Amazon Data Lifecycle Manager</fullname> <p>With Amazon Data Lifecycle Manager, you can manage the lifecycle of your AWS resources. You create lifecycle policies, which are used to automate operations on the specified resources.</p> <p>Amazon DLM supports Amazon EBS volumes and snapshots. For information about using Amazon DLM with Amazon EBS, see <a href=\"http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/snapshot-lifecycle.html\">Automating the Amazon EBS Snapshot Lifecycle</a> in the <i>Amazon EC2 User Guide</i>.</p>"
+  "documentation":"<fullname>Amazon Data Lifecycle Manager</fullname> <p>With Amazon Data Lifecycle Manager, you can manage the lifecycle of your AWS resources. You create lifecycle policies, which are used to automate operations on the specified resources.</p> <p>Amazon DLM supports Amazon EBS volumes and snapshots. For information about using Amazon DLM with Amazon EBS, see <a href=\"https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/snapshot-lifecycle.html\">Automating the Amazon EBS Snapshot Lifecycle</a> in the <i>Amazon EC2 User Guide</i>.</p>"
 }

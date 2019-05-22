@@ -2,7 +2,6 @@
 """Utility methods for marshmallow."""
 from __future__ import absolute_import, unicode_literals
 
-import collections
 import datetime
 import inspect
 import json
@@ -16,6 +15,8 @@ from pprint import pprint as py_pprint
 
 from marshmallow.compat import OrderedDict, binary_type, text_type
 from marshmallow.compat import get_func_args as compat_get_func_args
+from marshmallow.compat import Mapping, Iterable
+from marshmallow.warnings import unused_and_removed_in_ma3
 
 
 dateutil_available = False
@@ -31,6 +32,12 @@ class _Missing(object):
         return False
 
     __nonzero__ = __bool__  # PY2 compat
+
+    def __copy__(self):
+        return self
+
+    def __deepcopy__(self, _):
+        return self
 
     def __repr__(self):
         return '<marshmallow.missing>'
@@ -51,10 +58,10 @@ def is_generator(obj):
 def is_iterable_but_not_string(obj):
     """Return True if ``obj`` is an iterable object that isn't a string."""
     return (
-        (isinstance(obj, collections.Iterable) and not hasattr(obj, "strip")) or is_generator(obj)
+        (isinstance(obj, Iterable) and not hasattr(obj, "strip")) or is_generator(obj)
     )
 
-
+@unused_and_removed_in_ma3
 def is_indexable_but_not_string(obj):
     """Return True if ``obj`` is indexable but isn't a string."""
     return not hasattr(obj, "strip") and hasattr(obj, "__getitem__")
@@ -62,7 +69,7 @@ def is_indexable_but_not_string(obj):
 
 def is_collection(obj):
     """Return True if ``obj`` is a collection type, e.g list, tuple, queryset."""
-    return is_iterable_but_not_string(obj) and not isinstance(obj, collections.Mapping)
+    return is_iterable_but_not_string(obj) and not isinstance(obj, Mapping)
 
 
 def is_instance_or_subclass(val, class_):
@@ -78,6 +85,7 @@ def is_keyed_tuple(obj):
     """
     return isinstance(obj, tuple) and hasattr(obj, '_fields')
 
+@unused_and_removed_in_ma3
 def float_to_decimal(f):
     """Convert a floating point number to a Decimal with no loss of information.
         See: http://docs.python.org/release/2.6.7/library/decimal.html#decimal-faq
@@ -92,8 +100,10 @@ def float_to_decimal(f):
         result = ctx.divide(numerator, denominator)
     return result
 
+
 ZERO_DECIMAL = Decimal()
 
+@unused_and_removed_in_ma3
 def decimal_to_fixed(value, precision):
     """Convert a `Decimal` to a fixed-precision number as a string."""
     return text_type(value.quantize(precision, rounding=ROUND_HALF_EVEN))
@@ -131,6 +141,7 @@ def pprint(obj, *args, **kwargs):
         print(json.dumps(obj, *args, **kwargs))
     else:
         py_pprint(obj, *args, **kwargs)
+
 
 # From pytz: http://pytz.sourceforge.net/
 ZERO = datetime.timedelta(0)
@@ -183,6 +194,7 @@ class UTC(datetime.tzinfo):
     def __str__(self):
         return "UTC"
 
+
 UTC = utc = UTC()  # UTC is a singleton
 
 
@@ -210,6 +222,7 @@ def rfcformat(dt, localtime=False):
         return formatdate(timegm(dt.utctimetuple()))
     else:
         return local_rfcformat(dt)
+
 
 # From Django
 _iso8601_re = re.compile(

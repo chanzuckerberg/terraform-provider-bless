@@ -82,7 +82,7 @@
         {"shape":"ThrottlingException"},
         {"shape":"LimitExceededException"}
       ],
-      "documentation":"<p>Creates a data set. A data set stores data retrieved from a data store by applying an SQL action.</p> <note> <p>This operation creates the skeleton of a data set. To populate the data set, call \"CreateDatasetContent\".</p> </note>"
+      "documentation":"<p>Creates a data set. A data set stores data retrieved from a data store by applying a \"queryAction\" (a SQL query) or a \"containerAction\" (executing a containerized application). This operation creates the skeleton of a data set. The data set can be populated manually by calling \"CreateDatasetContent\" or automatically according to a \"trigger\" you specify.</p>"
     },
     "CreateDatasetContent":{
       "name":"CreateDatasetContent",
@@ -91,6 +91,7 @@
         "requestUri":"/datasets/{datasetName}/content"
       },
       "input":{"shape":"CreateDatasetContentRequest"},
+      "output":{"shape":"CreateDatasetContentResponse"},
       "errors":[
         {"shape":"InvalidRequestException"},
         {"shape":"ResourceNotFoundException"},
@@ -98,7 +99,7 @@
         {"shape":"ServiceUnavailableException"},
         {"shape":"ThrottlingException"}
       ],
-      "documentation":"<p>Creates the content of a data set by applying an SQL action.</p>"
+      "documentation":"<p>Creates the content of a data set by applying a \"queryAction\" (a SQL query) or a \"containerAction\" (executing a containerized application).</p>"
     },
     "CreateDatastore":{
       "name":"CreateDatastore",
@@ -136,7 +137,7 @@
         {"shape":"ThrottlingException"},
         {"shape":"LimitExceededException"}
       ],
-      "documentation":"<p>Creates a pipeline. A pipeline consumes messages from one or more channels and allows you to process the messages before storing them in a data store.</p>"
+      "documentation":"<p>Creates a pipeline. A pipeline consumes messages from one or more channels and allows you to process the messages before storing them in a data store. You must specify both a <code>channel</code> and a <code>datastore</code> activity and, optionally, as many as 23 additional activities in the <code>pipelineActivities</code> array.</p>"
     },
     "DeleteChannel":{
       "name":"DeleteChannel",
@@ -340,6 +341,23 @@
         {"shape":"ThrottlingException"}
       ],
       "documentation":"<p>Retrieves a list of channels.</p>"
+    },
+    "ListDatasetContents":{
+      "name":"ListDatasetContents",
+      "http":{
+        "method":"GET",
+        "requestUri":"/datasets/{datasetName}/contents"
+      },
+      "input":{"shape":"ListDatasetContentsRequest"},
+      "output":{"shape":"ListDatasetContentsResponse"},
+      "errors":[
+        {"shape":"InvalidRequestException"},
+        {"shape":"InternalFailureException"},
+        {"shape":"ServiceUnavailableException"},
+        {"shape":"ThrottlingException"},
+        {"shape":"ResourceNotFoundException"}
+      ],
+      "documentation":"<p>Lists information about data set contents that have been created.</p>"
     },
     "ListDatasets":{
       "name":"ListDatasets",
@@ -574,7 +592,7 @@
         {"shape":"ThrottlingException"},
         {"shape":"LimitExceededException"}
       ],
-      "documentation":"<p>Updates the settings of a pipeline.</p>"
+      "documentation":"<p>Updates the settings of a pipeline. You must specify both a <code>channel</code> and a <code>datastore</code> activity and, optionally, as many as 23 additional activities in the <code>pipelineActivities</code> array.</p>"
     }
   },
   "shapes":{
@@ -663,7 +681,7 @@
         },
         "messages":{
           "shape":"Messages",
-          "documentation":"<p>The list of messages to be sent. Each message has format: '{ \"messageId\": \"string\", \"payload\": \"string\"}'.</p>"
+          "documentation":"<p>The list of messages to be sent. Each message has format: '{ \"messageId\": \"string\", \"payload\": \"string\"}'.</p> <p>Note that the field names of message payloads (data) that you send to AWS IoT Analytics:</p> <ul> <li> <p>Must contain only alphanumeric characters and undescores (_); no other special characters are allowed.</p> </li> <li> <p>Must begin with an alphabetic character or single underscore (_).</p> </li> <li> <p>Cannot contain hyphens (-).</p> </li> <li> <p>In regular expression terms: \"^[A-Za-z_]([A-Za-z0-9]*|[A-Za-z0-9][A-Za-z0-9_]*)$\". </p> </li> <li> <p>Cannot be greater than 255 characters.</p> </li> <li> <p>Are case-insensitive. (Fields named \"foo\" and \"FOO\" in the same payload are considered duplicates.)</p> </li> </ul> <p>For example, {\"temp_01\": 29} or {\"_temp_01\": 29} are valid, but {\"temp-01\": 29}, {\"01_temp\": 29} or {\"__temp_01\": 29} are invalid in message payloads. </p>"
         }
       }
     },
@@ -675,6 +693,18 @@
           "documentation":"<p>A list of any errors encountered when sending the messages to the channel.</p>"
         }
       }
+    },
+    "BucketKeyExpression":{
+      "type":"string",
+      "max":255,
+      "min":1,
+      "pattern":"^[a-zA-Z0-9!_.*'()/{}:-]*$"
+    },
+    "BucketName":{
+      "type":"string",
+      "max":255,
+      "min":3,
+      "pattern":"^[a-zA-Z0-9.\\-_]*$"
     },
     "CancelPipelineReprocessingRequest":{
       "type":"structure",
@@ -805,6 +835,40 @@
       },
       "documentation":"<p>A summary of information about a channel.</p>"
     },
+    "ComputeType":{
+      "type":"string",
+      "enum":[
+        "ACU_1",
+        "ACU_2"
+      ]
+    },
+    "ContainerDatasetAction":{
+      "type":"structure",
+      "required":[
+        "image",
+        "executionRoleArn",
+        "resourceConfiguration"
+      ],
+      "members":{
+        "image":{
+          "shape":"Image",
+          "documentation":"<p>The ARN of the Docker container stored in your account. The Docker container contains an application and needed support libraries and is used to generate data set contents.</p>"
+        },
+        "executionRoleArn":{
+          "shape":"RoleArn",
+          "documentation":"<p>The ARN of the role which gives permission to the system to access needed resources in order to run the \"containerAction\". This includes, at minimum, permission to retrieve the data set contents which are the input to the containerized application.</p>"
+        },
+        "resourceConfiguration":{
+          "shape":"ResourceConfiguration",
+          "documentation":"<p>Configuration of the resource which executes the \"containerAction\".</p>"
+        },
+        "variables":{
+          "shape":"Variables",
+          "documentation":"<p>The values of variables used within the context of the execution of the containerized application (basically, parameters passed to the application). Each variable must have a name and a value given by one of \"stringValue\", \"datasetContentVersionValue\", or \"outputFileUriValue\".</p>"
+        }
+      },
+      "documentation":"<p>Information needed to run the \"containerAction\" to produce data set contents.</p>"
+    },
     "CreateChannelRequest":{
       "type":"structure",
       "required":["channelName"],
@@ -852,6 +916,15 @@
         }
       }
     },
+    "CreateDatasetContentResponse":{
+      "type":"structure",
+      "members":{
+        "versionId":{
+          "shape":"DatasetContentVersion",
+          "documentation":"<p>The version ID of the data set contents which are being created.</p>"
+        }
+      }
+    },
     "CreateDatasetRequest":{
       "type":"structure",
       "required":[
@@ -865,11 +938,23 @@
         },
         "actions":{
           "shape":"DatasetActions",
-          "documentation":"<p>A list of actions that create the data set. Only one action is supported at this time.</p>"
+          "documentation":"<p>A list of actions that create the data set contents.</p>"
         },
         "triggers":{
           "shape":"DatasetTriggers",
-          "documentation":"<p>A list of triggers. A trigger causes data set content to be populated at a specified time or time interval. The list of triggers can be empty or contain up to five <b>DataSetTrigger</b> objects.</p>"
+          "documentation":"<p>A list of triggers. A trigger causes data set contents to be populated at a specified time interval or when another data set's contents are created. The list of triggers can be empty or contain up to five <b>DataSetTrigger</b> objects.</p>"
+        },
+        "contentDeliveryRules":{
+          "shape":"DatasetContentDeliveryRules",
+          "documentation":"<p>When data set contents are created they are delivered to destinations specified here.</p>"
+        },
+        "retentionPeriod":{
+          "shape":"RetentionPeriod",
+          "documentation":"<p>[Optional] How long, in days, versions of data set contents are kept for the data set. If not specified or set to null, versions of data set contents are retained for at most 90 days. The number of versions of data set contents retained is determined by the <code>versioningConfiguration</code> parameter. (For more information, see https://docs.aws.amazon.com/iotanalytics/latest/userguide/getting-started.html#aws-iot-analytics-dataset-versions)</p>"
+        },
+        "versioningConfiguration":{
+          "shape":"VersioningConfiguration",
+          "documentation":"<p>[Optional] How many versions of data set contents are kept. If not specified or set to null, only the latest version plus the latest succeeded version (if they are different) are kept for the time period specified by the \"retentionPeriod\" parameter. (For more information, see https://docs.aws.amazon.com/iotanalytics/latest/userguide/getting-started.html#aws-iot-analytics-dataset-versions)</p>"
         },
         "tags":{
           "shape":"TagList",
@@ -887,6 +972,10 @@
         "datasetArn":{
           "shape":"DatasetArn",
           "documentation":"<p>The ARN of the data set.</p>"
+        },
+        "retentionPeriod":{
+          "shape":"RetentionPeriod",
+          "documentation":"<p>How long, in days, data set contents are kept for the data set.</p>"
         }
       }
     },
@@ -938,7 +1027,7 @@
         },
         "pipelineActivities":{
           "shape":"PipelineActivities",
-          "documentation":"<p>A list of pipeline activities.</p> <p>The list can be 1-25 <b>PipelineActivity</b> objects. Activities perform transformations on your messages, such as removing, renaming, or adding message attributes; filtering messages based on attribute values; invoking your Lambda functions on messages for advanced processing; or performing mathematical transformations to normalize device data.</p>"
+          "documentation":"<p>A list of \"PipelineActivity\" objects. Activities perform transformations on your messages, such as removing, renaming or adding message attributes; filtering messages based on attribute values; invoking your Lambda functions on messages for advanced processing; or performing mathematical transformations to normalize device data.</p> <p>The list can be 2-25 <b>PipelineActivity</b> objects and must contain both a <code>channel</code> and a <code>datastore</code> activity. Each entry in the list must contain only one activity, for example:</p> <p> <code>pipelineActivities = [ { \"channel\": { ... } }, { \"lambda\": { ... } }, ... ]</code> </p>"
         },
         "tags":{
           "shape":"TagList",
@@ -972,11 +1061,15 @@
         },
         "actions":{
           "shape":"DatasetActions",
-          "documentation":"<p>The \"DatasetAction\" objects that create the data set.</p>"
+          "documentation":"<p>The \"DatasetAction\" objects that automatically create the data set contents.</p>"
         },
         "triggers":{
           "shape":"DatasetTriggers",
           "documentation":"<p>The \"DatasetTrigger\" objects that specify when the data set is automatically updated.</p>"
+        },
+        "contentDeliveryRules":{
+          "shape":"DatasetContentDeliveryRules",
+          "documentation":"<p>When data set contents are created they are delivered to destinations specified here.</p>"
         },
         "status":{
           "shape":"DatasetStatus",
@@ -989,6 +1082,14 @@
         "lastUpdateTime":{
           "shape":"Timestamp",
           "documentation":"<p>The last time the data set was updated.</p>"
+        },
+        "retentionPeriod":{
+          "shape":"RetentionPeriod",
+          "documentation":"<p>[Optional] How long, in days, message data is kept for the data set.</p>"
+        },
+        "versioningConfiguration":{
+          "shape":"VersioningConfiguration",
+          "documentation":"<p>[Optional] How many versions of data set contents are kept. If not specified or set to null, only the latest version plus the latest succeeded version (if they are different) are kept for the time period specified by the \"retentionPeriod\" parameter. (For more information, see https://docs.aws.amazon.com/iotanalytics/latest/userguide/getting-started.html#aws-iot-analytics-dataset-versions)</p>"
         }
       },
       "documentation":"<p>Information about a data set.</p>"
@@ -998,20 +1099,51 @@
       "members":{
         "actionName":{
           "shape":"DatasetActionName",
-          "documentation":"<p>The name of the data set action.</p>"
+          "documentation":"<p>The name of the data set action by which data set contents are automatically created.</p>"
         },
         "queryAction":{
           "shape":"SqlQueryDatasetAction",
-          "documentation":"<p>An \"SqlQueryDatasetAction\" object that contains the SQL query to modify the message.</p>"
+          "documentation":"<p>An \"SqlQueryDatasetAction\" object that uses an SQL query to automatically create data set contents.</p>"
+        },
+        "containerAction":{
+          "shape":"ContainerDatasetAction",
+          "documentation":"<p>Information which allows the system to run a containerized application in order to create the data set contents. The application must be in a Docker container along with any needed support libraries.</p>"
         }
       },
-      "documentation":"<p>A \"DatasetAction\" object specifying the query that creates the data set content.</p>"
+      "documentation":"<p>A \"DatasetAction\" object that specifies how data set contents are automatically created.</p>"
     },
     "DatasetActionName":{
       "type":"string",
       "max":128,
       "min":1,
       "pattern":"^[a-zA-Z0-9_]+$"
+    },
+    "DatasetActionSummaries":{
+      "type":"list",
+      "member":{"shape":"DatasetActionSummary"},
+      "max":1,
+      "min":1
+    },
+    "DatasetActionSummary":{
+      "type":"structure",
+      "members":{
+        "actionName":{
+          "shape":"DatasetActionName",
+          "documentation":"<p>The name of the action which automatically creates the data set's contents.</p>"
+        },
+        "actionType":{
+          "shape":"DatasetActionType",
+          "documentation":"<p>The type of action by which the data set's contents are automatically created.</p>"
+        }
+      },
+      "documentation":"<p>Information about the action which automatically creates the data set's contents.</p>"
+    },
+    "DatasetActionType":{
+      "type":"string",
+      "enum":[
+        "QUERY",
+        "CONTAINER"
+      ]
     },
     "DatasetActions":{
       "type":"list",
@@ -1020,6 +1152,41 @@
       "min":1
     },
     "DatasetArn":{"type":"string"},
+    "DatasetContentDeliveryDestination":{
+      "type":"structure",
+      "members":{
+        "iotEventsDestinationConfiguration":{
+          "shape":"IotEventsDestinationConfiguration",
+          "documentation":"<p>Configuration information for delivery of data set contents to AWS IoT Events.</p>"
+        },
+        "s3DestinationConfiguration":{
+          "shape":"S3DestinationConfiguration",
+          "documentation":"<p>Configuration information for delivery of data set contents to Amazon S3.</p>"
+        }
+      },
+      "documentation":"<p>The destination to which data set contents are delivered.</p>"
+    },
+    "DatasetContentDeliveryRule":{
+      "type":"structure",
+      "required":["destination"],
+      "members":{
+        "entryName":{
+          "shape":"EntryName",
+          "documentation":"<p>The name of the data set content delivery rules entry.</p>"
+        },
+        "destination":{
+          "shape":"DatasetContentDeliveryDestination",
+          "documentation":"<p>The destination to which data set contents are delivered.</p>"
+        }
+      },
+      "documentation":"<p>When data set contents are created they are delivered to destination specified here.</p>"
+    },
+    "DatasetContentDeliveryRules":{
+      "type":"list",
+      "member":{"shape":"DatasetContentDeliveryRule"},
+      "max":20,
+      "min":0
+    },
     "DatasetContentState":{
       "type":"string",
       "enum":[
@@ -1033,16 +1200,57 @@
       "members":{
         "state":{
           "shape":"DatasetContentState",
-          "documentation":"<p>The state of the data set. Can be one of \"CREATING\", \"SUCCEEDED\" or \"FAILED\".</p>"
+          "documentation":"<p>The state of the data set contents. Can be one of \"READY\", \"CREATING\", \"SUCCEEDED\" or \"FAILED\".</p>"
         },
         "reason":{
           "shape":"Reason",
-          "documentation":"<p>The reason the data set is in this state.</p>"
+          "documentation":"<p>The reason the data set contents are in this state.</p>"
         }
       },
-      "documentation":"<p>The state of the data set and the reason it is in this state.</p>"
+      "documentation":"<p>The state of the data set contents and the reason they are in this state.</p>"
     },
-    "DatasetContentVersion":{"type":"string"},
+    "DatasetContentSummaries":{
+      "type":"list",
+      "member":{"shape":"DatasetContentSummary"}
+    },
+    "DatasetContentSummary":{
+      "type":"structure",
+      "members":{
+        "version":{
+          "shape":"DatasetContentVersion",
+          "documentation":"<p>The version of the data set contents.</p>"
+        },
+        "status":{
+          "shape":"DatasetContentStatus",
+          "documentation":"<p>The status of the data set contents.</p>"
+        },
+        "creationTime":{
+          "shape":"Timestamp",
+          "documentation":"<p>The actual time the creation of the data set contents was started.</p>"
+        },
+        "scheduleTime":{
+          "shape":"Timestamp",
+          "documentation":"<p>The time the creation of the data set contents was scheduled to start.</p>"
+        }
+      },
+      "documentation":"<p>Summary information about data set contents.</p>"
+    },
+    "DatasetContentVersion":{
+      "type":"string",
+      "max":36,
+      "min":7
+    },
+    "DatasetContentVersionValue":{
+      "type":"structure",
+      "required":["datasetName"],
+      "members":{
+        "datasetName":{
+          "shape":"DatasetName",
+          "documentation":"<p>The name of the data set whose latest contents are used as input to the notebook or application.</p>"
+        }
+      },
+      "documentation":"<p>The data set whose latest contents are used as input to the notebook or application.</p>"
+    },
     "DatasetEntries":{
       "type":"list",
       "member":{"shape":"DatasetEntry"}
@@ -1097,6 +1305,14 @@
         "lastUpdateTime":{
           "shape":"Timestamp",
           "documentation":"<p>The last time the data set was updated.</p>"
+        },
+        "triggers":{
+          "shape":"DatasetTriggers",
+          "documentation":"<p>A list of triggers. A trigger causes data set content to be populated at a specified time interval or when another data set is populated. The list of triggers can be empty or contain up to five DataSetTrigger objects</p>"
+        },
+        "actions":{
+          "shape":"DatasetActionSummaries",
+          "documentation":"<p>A list of \"DataActionSummary\" objects.</p>"
         }
       },
       "documentation":"<p>A summary of information about a data set.</p>"
@@ -1107,6 +1323,10 @@
         "schedule":{
           "shape":"Schedule",
           "documentation":"<p>The \"Schedule\" when the trigger is initiated.</p>"
+        },
+        "dataset":{
+          "shape":"TriggeringDataset",
+          "documentation":"<p>The data set whose content creation triggers the creation of this data set's contents.</p>"
         }
       },
       "documentation":"<p>The \"DatasetTrigger\" that specifies when the data set is automatically updated.</p>"
@@ -1180,7 +1400,7 @@
           "documentation":"<p>The estimated size of the data store.</p>"
         }
       },
-      "documentation":"<p>Statistics information about the data store.</p>"
+      "documentation":"<p>Statistical information about the data store.</p>"
     },
     "DatastoreStatus":{
       "type":"string",
@@ -1282,6 +1502,24 @@
         }
       }
     },
+    "DeltaTime":{
+      "type":"structure",
+      "required":[
+        "offsetSeconds",
+        "timeExpression"
+      ],
+      "members":{
+        "offsetSeconds":{
+          "shape":"OffsetSeconds",
+          "documentation":"<p>The number of seconds of estimated \"in flight\" lag time of message data. When you create data set contents using message data from a specified time frame, some message data may still be \"in flight\" when processing begins, and so will not arrive in time to be processed. Use this field to make allowances for the \"in flight\" time of your message data, so that data not processed from a previous time frame will be included with the next time frame. Without this, missed message data would be excluded from processing during the next time frame as well, because its timestamp places it within the previous time frame.</p>"
+        },
+        "timeExpression":{
+          "shape":"TimeExpression",
+          "documentation":"<p>An expression by which the time of the message data may be determined. This may be the name of a timestamp field, or a SQL expression which is used to derive the time the message data was generated.</p>"
+        }
+      },
+      "documentation":"<p>Used to limit data to that which has arrived since the last execution of the action.</p>"
+    },
     "DescribeChannelRequest":{
       "type":"structure",
       "required":["channelName"],
@@ -1294,7 +1532,7 @@
         },
         "includeStatistics":{
           "shape":"IncludeStatisticsFlag",
-          "documentation":"<p>If true, include statistics about the channel in the response.</p>",
+          "documentation":"<p>If true, additional statistical information about the channel is included in the response.</p>",
           "location":"querystring",
           "locationName":"includeStatistics"
         }
@@ -1346,7 +1584,7 @@
         },
         "includeStatistics":{
           "shape":"IncludeStatisticsFlag",
-          "documentation":"<p>If true, include statistics about the data store in the response.</p>",
+          "documentation":"<p>If true, additional statistical information about the datastore is included in the response.</p>",
           "location":"querystring",
           "locationName":"includeStatistics"
         }
@@ -1361,7 +1599,7 @@
         },
         "statistics":{
           "shape":"DatastoreStatistics",
-          "documentation":"<p>Statistics about the data store. Included if the 'includeStatistics' parameter is set to true in the request.</p>"
+          "documentation":"<p>Additional statistical information about the data store. Included if the 'includeStatistics' parameter is set to true in the request.</p>"
         }
       }
     },
@@ -1464,6 +1702,7 @@
       },
       "documentation":"<p>An activity that adds information from the AWS IoT Device Shadows service to a message.</p>"
     },
+    "DoubleValue":{"type":"double"},
     "EndTime":{"type":"timestamp"},
     "EntryName":{"type":"string"},
     "ErrorCode":{"type":"string"},
@@ -1495,7 +1734,7 @@
         },
         "filter":{
           "shape":"FilterExpression",
-          "documentation":"<p>An expression that looks like an SQL WHERE clause that must return a Boolean value.</p>"
+          "documentation":"<p>An expression that looks like a SQL WHERE clause that must return a Boolean value.</p>"
         },
         "next":{
           "shape":"ActivityName",
@@ -1544,6 +1783,40 @@
         }
       }
     },
+    "GlueConfiguration":{
+      "type":"structure",
+      "required":[
+        "tableName",
+        "databaseName"
+      ],
+      "members":{
+        "tableName":{
+          "shape":"GlueTableName",
+          "documentation":"<p>The name of the table in your AWS Glue Data Catalog which is used to perform the ETL (extract, transform and load) operations. (An AWS Glue Data Catalog table contains partitioned data and descriptions of data sources and targets.)</p>"
+        },
+        "databaseName":{
+          "shape":"GlueDatabaseName",
+          "documentation":"<p>The name of the database in your AWS Glue Data Catalog in which the table is located. (An AWS Glue Data Catalog database contains Glue Data tables.)</p>"
+        }
+      },
+      "documentation":"<p>Configuration information for coordination with the AWS Glue ETL (extract, transform and load) service.</p>"
+    },
+    "GlueDatabaseName":{
+      "type":"string",
+      "max":150,
+      "min":1,
+      "pattern":"[\\u0020-\\uD7FF\\uE000-\\uFFFD\\uD800\\uDC00-\\uDBFF\\uDFFF\\t]*"
+    },
+    "GlueTableName":{
+      "type":"string",
+      "max":150,
+      "min":1,
+      "pattern":"[\\u0020-\\uD7FF\\uE000-\\uFFFD\\uD800\\uDC00-\\uDBFF\\uDFFF\\t]*"
+    },
+    "Image":{
+      "type":"string",
+      "max":255
+    },
     "IncludeStatisticsFlag":{"type":"boolean"},
     "InternalFailureException":{
       "type":"structure",
@@ -1563,6 +1836,30 @@
       "documentation":"<p>The request was not valid.</p>",
       "error":{"httpStatusCode":400},
       "exception":true
+    },
+    "IotEventsDestinationConfiguration":{
+      "type":"structure",
+      "required":[
+        "inputName",
+        "roleArn"
+      ],
+      "members":{
+        "inputName":{
+          "shape":"IotEventsInputName",
+          "documentation":"<p>The name of the AWS IoT Events input to which data set contents are delivered.</p>"
+        },
+        "roleArn":{
+          "shape":"RoleArn",
+          "documentation":"<p>The ARN of the role which grants AWS IoT Analytics permission to deliver data set contents to an AWS IoT Events input.</p>"
+        }
+      },
+      "documentation":"<p>Configuration information for delivery of data set contents to AWS IoT Events.</p>"
+    },
+    "IotEventsInputName":{
+      "type":"string",
+      "max":128,
+      "min":1,
+      "pattern":"^[a-zA-Z][a-zA-Z0-9_]*$"
     },
     "LambdaActivity":{
       "type":"structure",
@@ -1629,6 +1926,55 @@
         "channelSummaries":{
           "shape":"ChannelSummaries",
           "documentation":"<p>A list of \"ChannelSummary\" objects.</p>"
+        },
+        "nextToken":{
+          "shape":"NextToken",
+          "documentation":"<p>The token to retrieve the next set of results, or <code>null</code> if there are no more results.</p>"
+        }
+      }
+    },
+    "ListDatasetContentsRequest":{
+      "type":"structure",
+      "required":["datasetName"],
+      "members":{
+        "datasetName":{
+          "shape":"DatasetName",
+          "documentation":"<p>The name of the data set whose contents information you want to list.</p>",
+          "location":"uri",
+          "locationName":"datasetName"
+        },
+        "nextToken":{
+          "shape":"NextToken",
+          "documentation":"<p>The token for the next set of results.</p>",
+          "location":"querystring",
+          "locationName":"nextToken"
+        },
+        "maxResults":{
+          "shape":"MaxResults",
+          "documentation":"<p>The maximum number of results to return in this request.</p>",
+          "location":"querystring",
+          "locationName":"maxResults"
+        },
+        "scheduledOnOrAfter":{
+          "shape":"Timestamp",
+          "documentation":"<p>A filter to limit results to those data set contents whose creation is scheduled on or after the given time. See the field <code>triggers.schedule</code> in the CreateDataset request. (timestamp)</p>",
+          "location":"querystring",
+          "locationName":"scheduledOnOrAfter"
+        },
+        "scheduledBefore":{
+          "shape":"Timestamp",
+          "documentation":"<p>A filter to limit results to those data set contents whose creation is scheduled before the given time. See the field <code>triggers.schedule</code> in the CreateDataset request. (timestamp)</p>",
+          "location":"querystring",
+          "locationName":"scheduledBefore"
+        }
+      }
+    },
+    "ListDatasetContentsResponse":{
+      "type":"structure",
+      "members":{
+        "datasetContentSummaries":{
+          "shape":"DatasetContentSummaries",
+          "documentation":"<p>Summary information about data set contents that have been created.</p>"
         },
         "nextToken":{
           "shape":"NextToken",
@@ -1790,7 +2136,7 @@
         },
         "attribute":{
           "shape":"AttributeName",
-          "documentation":"<p>The name of the attribute that will contain the result of the math operation.</p>"
+          "documentation":"<p>The name of the attribute that contains the result of the math operation.</p>"
         },
         "math":{
           "shape":"MathExpression",
@@ -1816,6 +2162,11 @@
     "MaxResults":{
       "type":"integer",
       "max":250,
+      "min":1
+    },
+    "MaxVersions":{
+      "type":"integer",
+      "max":1000,
       "min":1
     },
     "Message":{
@@ -1853,6 +2204,22 @@
       "member":{"shape":"Message"}
     },
     "NextToken":{"type":"string"},
+    "OffsetSeconds":{"type":"integer"},
+    "OutputFileName":{
+      "type":"string",
+      "pattern":"[\\w\\.-]{1,255}"
+    },
+    "OutputFileUriValue":{
+      "type":"structure",
+      "required":["fileName"],
+      "members":{
+        "fileName":{
+          "shape":"OutputFileName",
+          "documentation":"<p>The URI of the location where data set contents are stored, usually the URI of a file in an S3 bucket.</p>"
+        }
+      },
+      "documentation":"<p>The value of the variable as a structure that specifies an output file URI.</p>"
+    },
     "Pipeline":{
       "type":"structure",
       "members":{
@@ -1979,6 +2346,22 @@
         }
       }
     },
+    "QueryFilter":{
+      "type":"structure",
+      "members":{
+        "deltaTime":{
+          "shape":"DeltaTime",
+          "documentation":"<p>Used to limit data to that which has arrived since the last execution of the action.</p>"
+        }
+      },
+      "documentation":"<p>Information which is used to filter message data, to segregate it according to the time frame in which it arrives.</p>"
+    },
+    "QueryFilters":{
+      "type":"list",
+      "member":{"shape":"QueryFilter"},
+      "max":1,
+      "min":0
+    },
     "Reason":{"type":"string"},
     "RemoveAttributesActivity":{
       "type":"structure",
@@ -2056,6 +2439,24 @@
       "max":2048,
       "min":20
     },
+    "ResourceConfiguration":{
+      "type":"structure",
+      "required":[
+        "computeType",
+        "volumeSizeInGB"
+      ],
+      "members":{
+        "computeType":{
+          "shape":"ComputeType",
+          "documentation":"<p>The type of the compute resource used to execute the \"containerAction\". Possible values are: ACU_1 (vCPU=4, memory=16GiB) or ACU_2 (vCPU=8, memory=32GiB).</p>"
+        },
+        "volumeSizeInGB":{
+          "shape":"VolumeSizeInGB",
+          "documentation":"<p>The size (in GB) of the persistent storage available to the resource instance used to execute the \"containerAction\" (min: 1, max: 50).</p>"
+        }
+      },
+      "documentation":"<p>The configuration of the resource used to execute the \"containerAction\".</p>"
+    },
     "ResourceNotFoundException":{
       "type":"structure",
       "members":{
@@ -2118,6 +2519,33 @@
         }
       }
     },
+    "S3DestinationConfiguration":{
+      "type":"structure",
+      "required":[
+        "bucket",
+        "key",
+        "roleArn"
+      ],
+      "members":{
+        "bucket":{
+          "shape":"BucketName",
+          "documentation":"<p>The name of the Amazon S3 bucket to which data set contents are delivered.</p>"
+        },
+        "key":{
+          "shape":"BucketKeyExpression",
+          "documentation":"<p>The key of the data set contents object. Each object in an Amazon S3 bucket has a key that is its unique identifier within the bucket (each object in a bucket has exactly one key).</p>"
+        },
+        "glueConfiguration":{
+          "shape":"GlueConfiguration",
+          "documentation":"<p>Configuration information for coordination with the AWS Glue ETL (extract, transform and load) service.</p>"
+        },
+        "roleArn":{
+          "shape":"RoleArn",
+          "documentation":"<p>The ARN of the role which grants AWS IoT Analytics permission to interact with your Amazon S3 and AWS Glue resources.</p>"
+        }
+      },
+      "documentation":"<p>Configuration information for delivery of data set contents to Amazon S3.</p>"
+    },
     "SampleChannelDataRequest":{
       "type":"structure",
       "required":["channelName"],
@@ -2162,7 +2590,7 @@
       "members":{
         "expression":{
           "shape":"ScheduleExpression",
-          "documentation":"<p>The expression that defines when to trigger an update. For more information, see <a href=\"https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html\"> Schedule Expressions for Rules</a> in the Amazon CloudWatch documentation.</p>"
+          "documentation":"<p>The expression that defines when to trigger an update. For more information, see <a href=\"https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html\"> Schedule Expressions for Rules</a> in the Amazon CloudWatch Events User Guide.</p>"
         }
       },
       "documentation":"<p>The schedule for when to trigger an update.</p>"
@@ -2208,7 +2636,11 @@
       "members":{
         "sqlQuery":{
           "shape":"SqlQuery",
-          "documentation":"<p>An SQL query string.</p>"
+          "documentation":"<p>A SQL query string.</p>"
+        },
+        "filters":{
+          "shape":"QueryFilters",
+          "documentation":"<p>Pre-filters applied to message data.</p>"
         }
       },
       "documentation":"<p>The SQL query to modify the message.</p>"
@@ -2243,6 +2675,11 @@
       }
     },
     "StartTime":{"type":"timestamp"},
+    "StringValue":{
+      "type":"string",
+      "max":1024,
+      "min":0
+    },
     "Tag":{
       "type":"structure",
       "required":[
@@ -2287,7 +2724,7 @@
       "members":{
         "resourceArn":{
           "shape":"ResourceArn",
-          "documentation":"<p>The ARN of the resource whose tags will be modified.</p>",
+          "documentation":"<p>The ARN of the resource whose tags you want to modify.</p>",
           "location":"querystring",
           "locationName":"resourceArn"
         },
@@ -2316,8 +2753,21 @@
       "error":{"httpStatusCode":429},
       "exception":true
     },
+    "TimeExpression":{"type":"string"},
     "Timestamp":{"type":"timestamp"},
+    "TriggeringDataset":{
+      "type":"structure",
+      "required":["name"],
+      "members":{
+        "name":{
+          "shape":"DatasetName",
+          "documentation":"<p>The name of the data set whose content generation triggers the new data set content generation.</p>"
+        }
+      },
+      "documentation":"<p>Information about the data set whose content generation triggers the new data set content generation.</p>"
+    },
     "UnlimitedRetentionPeriod":{"type":"boolean"},
+    "UnlimitedVersioning":{"type":"boolean"},
     "UntagResourceRequest":{
       "type":"structure",
       "required":[
@@ -2327,13 +2777,13 @@
       "members":{
         "resourceArn":{
           "shape":"ResourceArn",
-          "documentation":"<p>The ARN of the resource whose tags will be removed.</p>",
+          "documentation":"<p>The ARN of the resource whose tags you want to remove.</p>",
           "location":"querystring",
           "locationName":"resourceArn"
         },
         "tagKeys":{
           "shape":"TagKeyList",
-          "documentation":"<p>The keys of those tags which will be removed.</p>",
+          "documentation":"<p>The keys of those tags which you want to remove.</p>",
           "location":"querystring",
           "locationName":"tagKeys"
         }
@@ -2375,11 +2825,23 @@
         },
         "actions":{
           "shape":"DatasetActions",
-          "documentation":"<p>A list of \"DatasetAction\" objects. Only one action is supported at this time.</p>"
+          "documentation":"<p>A list of \"DatasetAction\" objects.</p>"
         },
         "triggers":{
           "shape":"DatasetTriggers",
           "documentation":"<p>A list of \"DatasetTrigger\" objects. The list can be empty or can contain up to five <b>DataSetTrigger</b> objects.</p>"
+        },
+        "contentDeliveryRules":{
+          "shape":"DatasetContentDeliveryRules",
+          "documentation":"<p>When data set contents are created they are delivered to destinations specified here.</p>"
+        },
+        "retentionPeriod":{
+          "shape":"RetentionPeriod",
+          "documentation":"<p>How long, in days, data set contents are kept for the data set.</p>"
+        },
+        "versioningConfiguration":{
+          "shape":"VersioningConfiguration",
+          "documentation":"<p>[Optional] How many versions of data set contents are kept. If not specified or set to null, only the latest version plus the latest succeeded version (if they are different) are kept for the time period specified by the \"retentionPeriod\" parameter. (For more information, see https://docs.aws.amazon.com/iotanalytics/latest/userguide/getting-started.html#aws-iot-analytics-dataset-versions)</p>"
         }
       }
     },
@@ -2414,9 +2876,67 @@
         },
         "pipelineActivities":{
           "shape":"PipelineActivities",
-          "documentation":"<p>A list of \"PipelineActivity\" objects.</p> <p>The list can be 1-25 <b>PipelineActivity</b> objects. Activities perform transformations on your messages, such as removing, renaming or adding message attributes; filtering messages based on attribute values; invoking your Lambda functions on messages for advanced processing; or performing mathematical transformations to normalize device data.</p>"
+          "documentation":"<p>A list of \"PipelineActivity\" objects. Activities perform transformations on your messages, such as removing, renaming or adding message attributes; filtering messages based on attribute values; invoking your Lambda functions on messages for advanced processing; or performing mathematical transformations to normalize device data.</p> <p>The list can be 2-25 <b>PipelineActivity</b> objects and must contain both a <code>channel</code> and a <code>datastore</code> activity. Each entry in the list must contain only one activity, for example:</p> <p> <code>pipelineActivities = [ { \"channel\": { ... } }, { \"lambda\": { ... } }, ... ]</code> </p>"
         }
       }
+    },
+    "Variable":{
+      "type":"structure",
+      "required":["name"],
+      "members":{
+        "name":{
+          "shape":"VariableName",
+          "documentation":"<p>The name of the variable.</p>"
+        },
+        "stringValue":{
+          "shape":"StringValue",
+          "documentation":"<p>The value of the variable as a string.</p>"
+        },
+        "doubleValue":{
+          "shape":"DoubleValue",
+          "documentation":"<p>The value of the variable as a double (numeric).</p>",
+          "box":true
+        },
+        "datasetContentVersionValue":{
+          "shape":"DatasetContentVersionValue",
+          "documentation":"<p>The value of the variable as a structure that specifies a data set content version.</p>"
+        },
+        "outputFileUriValue":{
+          "shape":"OutputFileUriValue",
+          "documentation":"<p>The value of the variable as a structure that specifies an output file URI.</p>"
+        }
+      },
+      "documentation":"<p>An instance of a variable to be passed to the \"containerAction\" execution. Each variable must have a name and a value given by one of \"stringValue\", \"datasetContentVersionValue\", or \"outputFileUriValue\".</p>"
+    },
+    "VariableName":{
+      "type":"string",
+      "max":256,
+      "min":1
+    },
+    "Variables":{
+      "type":"list",
+      "member":{"shape":"Variable"},
+      "max":50,
+      "min":0
+    },
+    "VersioningConfiguration":{
+      "type":"structure",
+      "members":{
+        "unlimited":{
+          "shape":"UnlimitedVersioning",
+          "documentation":"<p>If true, unlimited versions of data set contents will be kept.</p>"
+        },
+        "maxVersions":{
+          "shape":"MaxVersions",
+          "documentation":"<p>How many versions of data set contents will be kept. The \"unlimited\" parameter must be false.</p>"
+        }
+      },
+      "documentation":"<p>Information about the versioning of data set contents.</p>"
+    },
+    "VolumeSizeInGB":{
+      "type":"integer",
+      "max":50,
+      "min":1
     },
     "errorMessage":{"type":"string"},
     "resourceArn":{"type":"string"},

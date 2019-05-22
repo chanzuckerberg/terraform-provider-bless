@@ -9,9 +9,10 @@ from optparse import SUPPRESS_HELP
 
 from pip._vendor import pkg_resources
 
-from pip._internal import cmdoptions
-from pip._internal.basecommand import RequirementCommand
 from pip._internal.cache import WheelCache
+from pip._internal.cli import cmdoptions
+from pip._internal.cli.base_command import RequirementCommand
+from pip._internal.cli.status_codes import ERROR
 from pip._internal.exceptions import (
     CommandError, InstallationError, PreviousBuildDirError,
 )
@@ -21,7 +22,6 @@ from pip._internal.operations.prepare import RequirementPreparer
 from pip._internal.req import RequirementSet, install_given_reqs
 from pip._internal.req.req_tracker import RequirementTracker
 from pip._internal.resolve import Resolver
-from pip._internal.status_codes import ERROR
 from pip._internal.utils.filesystem import check_path_owner
 from pip._internal.utils.misc import (
     ensure_dir, get_installed_version,
@@ -30,13 +30,44 @@ from pip._internal.utils.misc import (
 from pip._internal.utils.temp_dir import TempDirectory
 from pip._internal.wheel import WheelBuilder
 
-try:
-    import wheel
-except ImportError:
-    wheel = None
-
-
 logger = logging.getLogger(__name__)
+
+
+def is_wheel_installed():
+    """
+    Return whether the wheel package is installed.
+    """
+    try:
+        import wheel  # noqa: F401
+    except ImportError:
+        return False
+
+    return True
+
+
+def build_wheels(builder, pep517_requirements, legacy_requirements, session):
+    """
+    Build wheels for requirements, depending on whether wheel is installed.
+    """
+    # We don't build wheels for legacy requirements if wheel is not installed.
+    should_build_legacy = is_wheel_installed()
+
+    # Always build PEP 517 requirements
+    build_failures = builder.build(
+        pep517_requirements,
+        session=session, autobuilding=True
+    )
+
+    if should_build_legacy:
+        # We don't care about failures building legacy
+        # requirements, as we'll fall through to a direct
+        # install for those.
+        builder.build(
+            legacy_requirements,
+            session=session, autobuilding=True
+        )
+
+    return build_failures
 
 
 class InstallCommand(RequirementCommand):
@@ -83,6 +114,11 @@ class InstallCommand(RequirementCommand):
                  '<dir>. Use --upgrade to replace existing packages in <dir> '
                  'with new versions.'
         )
+        cmd_opts.add_option(cmdoptions.platform())
+        cmd_opts.add_option(cmdoptions.python_version())
+        cmd_opts.add_option(cmdoptions.implementation())
+        cmd_opts.add_option(cmdoptions.abi())
+
         cmd_opts.add_option(
             '--user',
             dest='use_user_site',
@@ -153,6 +189,8 @@ class InstallCommand(RequirementCommand):
 
         cmd_opts.add_option(cmdoptions.ignore_requires_python())
         cmd_opts.add_option(cmdoptions.no_build_isolation())
+        cmd_opts.add_option(cmdoptions.use_pep517())
+        cmd_opts.add_option(cmdoptions.no_use_pep517())
 
         cmd_opts.add_option(cmdoptions.install_options())
         cmd_opts.add_option(cmdoptions.global_options())
@@ -204,13 +242,19 @@ class InstallCommand(RequirementCommand):
 
     def run(self, options, args):
         cmdoptions.check_install_build_global(options)
-
         upgrade_strategy = "to-satisfy-only"
         if options.upgrade:
             upgrade_strategy = options.upgrade_strategy
 
         if options.build_dir:
             options.build_dir = os.path.abspath(options.build_dir)
+
+        cmdoptions.check_dist_restriction(options, check_target=True)
+
+        if options.python_version:
+            python_versions = [options.python_version]
+        else:
+            python_versions = None
 
         options.src_dir = os.path.abspath(options.src_dir)
         install_options = options.install_options or []
@@ -246,7 +290,14 @@ class InstallCommand(RequirementCommand):
         global_options = options.global_options or []
 
         with self._build_session(options) as session:
-            finder = self._build_package_finder(options, session)
+            finder = self._build_package_finder(
+                options=options,
+                session=session,
+                platform=options.platform,
+                python_versions=python_versions,
+                abi=options.abi,
+                implementation=options.implementation,
+            )
             build_delete = (not (options.no_clean or options.build_dir))
             wheel_cache = WheelCache(options.cache_dir, options.format_control)
 
@@ -266,6 +317,7 @@ class InstallCommand(RequirementCommand):
             ) as directory:
                 requirement_set = RequirementSet(
                     require_hashes=options.require_hashes,
+                    check_supported_wheels=not options.target_dir,
                 )
 
                 try:
@@ -295,6 +347,7 @@ class InstallCommand(RequirementCommand):
                         ignore_requires_python=options.ignore_requires_python,
                         ignore_installed=options.ignore_installed,
                         isolated=options.isolated_mode,
+                        use_pep517=options.use_pep517
                     )
                     resolver.resolve(requirement_set)
 
@@ -302,20 +355,34 @@ class InstallCommand(RequirementCommand):
                         modifying_pip=requirement_set.has_requirement("pip")
                     )
 
-                    # If caching is disabled or wheel is not installed don't
-                    # try to build wheels.
-                    if wheel and options.cache_dir:
-                        # build wheels before install.
-                        wb = WheelBuilder(
-                            finder, preparer, wheel_cache,
-                            build_options=[], global_options=[],
-                        )
-                        # Ignore the result: a failed wheel will be
-                        # installed from the sdist/vcs whatever.
-                        wb.build(
-                            requirement_set.requirements.values(),
-                            session=session, autobuilding=True
-                        )
+                    # Consider legacy and PEP517-using requirements separately
+                    legacy_requirements = []
+                    pep517_requirements = []
+                    for req in requirement_set.requirements.values():
+                        if req.use_pep517:
+                            pep517_requirements.append(req)
+                        else:
+                            legacy_requirements.append(req)
+
+                    wheel_builder = WheelBuilder(
+                        finder, preparer, wheel_cache,
+                        build_options=[], global_options=[],
+                    )
+
+                    build_failures = build_wheels(
+                        builder=wheel_builder,
+                        pep517_requirements=pep517_requirements,
+                        legacy_requirements=legacy_requirements,
+                        session=session,
+                    )
+
+                    # If we're using PEP 517, we cannot do a direct install
+                    # so we fail here.
+                    if build_failures:
+                        raise InstallationError(
+                            "Could not build wheels for {} which use"
+                            " PEP 517 and cannot be installed directly".format(
+                                ", ".join(r.name for r in build_failures)))
 
                     to_install = resolver.get_installation_order(
                         requirement_set
@@ -453,7 +520,11 @@ class InstallCommand(RequirementCommand):
                     )
 
     def _warn_about_conflicts(self, to_install):
-        package_set, _dep_info = check_install_conflicts(to_install)
+        try:
+            package_set, _dep_info = check_install_conflicts(to_install)
+        except Exception:
+            logger.error("Error checking for conflicts.", exc_info=True)
+            return
         missing, conflicting = _dep_info
 
         # NOTE: There is some duplication here from pip check

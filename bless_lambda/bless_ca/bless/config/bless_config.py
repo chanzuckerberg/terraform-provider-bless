@@ -14,6 +14,10 @@ BLESS_OPTIONS_SECTION = 'Bless Options'
 CERTIFICATE_VALIDITY_BEFORE_SEC_OPTION = 'certificate_validity_before_seconds'
 CERTIFICATE_VALIDITY_AFTER_SEC_OPTION = 'certificate_validity_after_seconds'
 CERTIFICATE_VALIDITY_SEC_DEFAULT = 60 * 2
+SERVER_CERTIFICATE_VALIDITY_BEFORE_SEC_OPTION = 'server_certificate_validity_before_seconds'
+SERVER_CERTIFICATE_VALIDITY_BEFORE_SEC_DEFAULT = 120
+SERVER_CERTIFICATE_VALIDITY_AFTER_SEC_OPTION = 'server_certificate_validity_after_seconds'
+SERVER_CERTIFICATE_VALIDITY_AFTER_SEC_DEFAULT = 31536000
 
 ENTROPY_MINIMUM_BITS_OPTION = 'entropy_minimum_bits'
 ENTROPY_MINIMUM_BITS_DEFAULT = 2048
@@ -35,6 +39,9 @@ CERTIFICATE_EXTENSIONS_DEFAULT = 'permit-X11-forwarding,' \
                                  'permit-pty,' \
                                  'permit-user-rc'
 
+HOSTNAME_VALIDATION_OPTION = 'hostname_validation'
+HOSTNAME_VALIDATION_DEFAULT = 'url'
+
 BLESS_CA_SECTION = 'Bless CA'
 CA_PRIVATE_KEY_FILE_OPTION = 'ca_private_key_file'
 CA_PRIVATE_KEY_OPTION = 'ca_private_key'
@@ -45,7 +52,7 @@ REGION_PASSWORD_OPTION_SUFFIX = '_password'
 
 KMSAUTH_SECTION = 'KMS Auth'
 KMSAUTH_USEKMSAUTH_OPTION = 'use_kmsauth'
-KMSAUTH_USEKMSAUTH_DEFAULT = False
+KMSAUTH_USEKMSAUTH_DEFAULT = "False"
 
 KMSAUTH_KEY_ID_OPTION = 'kmsauth_key_id'
 KMSAUTH_KEY_ID_DEFAULT = ''
@@ -63,7 +70,7 @@ REMOTE_USERNAMES_VALIDATION_OPTION = 'remote_usernames_validation'
 REMOTE_USERNAMES_VALIDATION_DEFAULT = 'principal'
 
 VALIDATE_REMOTE_USERNAMES_AGAINST_IAM_GROUPS_OPTION = 'kmsauth_validate_remote_usernames_against_iam_groups'
-VALIDATE_REMOTE_USERNAMES_AGAINST_IAM_GROUPS_DEFAULT = False
+VALIDATE_REMOTE_USERNAMES_AGAINST_IAM_GROUPS_DEFAULT = "False"
 
 IAM_GROUP_NAME_VALIDATION_FORMAT_OPTION = 'kmsauth_iam_group_name_format'
 IAM_GROUP_NAME_VALIDATION_FORMAT_DEFAULT = 'ssh-{}'
@@ -101,7 +108,10 @@ class BlessConfig(configparser.RawConfigParser, object):
                     VALIDATE_REMOTE_USERNAMES_AGAINST_IAM_GROUPS_OPTION: VALIDATE_REMOTE_USERNAMES_AGAINST_IAM_GROUPS_DEFAULT,
                     IAM_GROUP_NAME_VALIDATION_FORMAT_OPTION: IAM_GROUP_NAME_VALIDATION_FORMAT_DEFAULT,
                     REMOTE_USERNAMES_BLACKLIST_OPTION: REMOTE_USERNAMES_BLACKLIST_DEFAULT,
-                    CA_PRIVATE_KEY_COMPRESSION_OPTION: CA_PRIVATE_KEY_COMPRESSION_OPTION_DEFAULT
+                    CA_PRIVATE_KEY_COMPRESSION_OPTION: CA_PRIVATE_KEY_COMPRESSION_OPTION_DEFAULT,
+                    SERVER_CERTIFICATE_VALIDITY_BEFORE_SEC_OPTION: SERVER_CERTIFICATE_VALIDITY_BEFORE_SEC_DEFAULT,
+                    SERVER_CERTIFICATE_VALIDITY_AFTER_SEC_OPTION: SERVER_CERTIFICATE_VALIDITY_AFTER_SEC_DEFAULT,
+                    HOSTNAME_VALIDATION_OPTION: HOSTNAME_VALIDATION_DEFAULT
                     }
         configparser.RawConfigParser.__init__(self, defaults=defaults)
         self.read(config_file)
@@ -185,7 +195,7 @@ class BlessConfig(configparser.RawConfigParser, object):
 
     @staticmethod
     def _environment_key(section, option):
-        return (re.sub('\W+', '_', section) + '_' + re.sub('\W+', '_', option)).lower()
+        return (re.sub(r'\W+', '_', section) + '_' + re.sub(r'\W+', '_', option)).lower()
 
     @staticmethod
     def _decompress(data, algorithm):
