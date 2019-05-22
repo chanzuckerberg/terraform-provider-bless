@@ -40,7 +40,10 @@ import subprocess
 import shlex
 import io
 
+
 from sysconfig import get_config_vars, get_path
+
+from setuptools import SetuptoolsDeprecationWarning
 
 from setuptools.extern import six
 from setuptools.extern.six.moves import configparser, map
@@ -96,7 +99,7 @@ def samefile(p1, p2):
 
 if six.PY2:
 
-    def _to_ascii(s):
+    def _to_bytes(s):
         return s
 
     def isascii(s):
@@ -107,8 +110,8 @@ if six.PY2:
             return False
 else:
 
-    def _to_ascii(s):
-        return s.encode('ascii')
+    def _to_bytes(s):
+        return s.encode('utf8')
 
     def isascii(s):
         try:
@@ -632,7 +635,7 @@ class easy_install(Command):
 
     @contextlib.contextmanager
     def _tmpdir(self):
-        tmpdir = tempfile.mkdtemp(prefix=six.u("easy_install-"))
+        tmpdir = tempfile.mkdtemp(prefix=u"easy_install-")
         try:
             # cast to str as workaround for #709 and #710 and #712
             yield str(tmpdir)
@@ -805,7 +808,7 @@ class easy_install(Command):
         if is_script:
             body = self._load_template(dev_path) % locals()
             script_text = ScriptWriter.get_header(script_text) + body
-        self.write_script(script_name, _to_ascii(script_text), 'b')
+        self.write_script(script_name, _to_bytes(script_text), 'b')
 
     @staticmethod
     def _load_template(dev_path):
@@ -2077,7 +2080,7 @@ class ScriptWriter:
     @classmethod
     def get_script_args(cls, dist, executable=None, wininst=False):
         # for backward compatibility
-        warnings.warn("Use get_args", DeprecationWarning)
+        warnings.warn("Use get_args", EasyInstallDeprecationWarning)
         writer = (WindowsScriptWriter if wininst else ScriptWriter).best()
         header = cls.get_script_header("", executable, wininst)
         return writer.get_args(dist, header)
@@ -2085,12 +2088,10 @@ class ScriptWriter:
     @classmethod
     def get_script_header(cls, script_text, executable=None, wininst=False):
         # for backward compatibility
-        warnings.warn("Use get_header", DeprecationWarning)
+        warnings.warn("Use get_header", EasyInstallDeprecationWarning, stacklevel=2)
         if wininst:
             executable = "python.exe"
-        cmd = cls.command_spec_class.best().from_param(executable)
-        cmd.install_options(script_text)
-        return cmd.as_header()
+        return cls.get_header(script_text, executable)
 
     @classmethod
     def get_args(cls, dist, header=None):
@@ -2122,7 +2123,7 @@ class ScriptWriter:
     @classmethod
     def get_writer(cls, force_windows):
         # for backward compatibility
-        warnings.warn("Use best", DeprecationWarning)
+        warnings.warn("Use best", EasyInstallDeprecationWarning)
         return WindowsScriptWriter.best() if force_windows else cls.best()
 
     @classmethod
@@ -2154,7 +2155,7 @@ class WindowsScriptWriter(ScriptWriter):
     @classmethod
     def get_writer(cls):
         # for backward compatibility
-        warnings.warn("Use best", DeprecationWarning)
+        warnings.warn("Use best", EasyInstallDeprecationWarning)
         return cls.best()
 
     @classmethod
@@ -2335,3 +2336,7 @@ def _patch_usage():
         yield
     finally:
         distutils.core.gen_usage = saved
+
+class EasyInstallDeprecationWarning(SetuptoolsDeprecationWarning):
+    """Class for warning about deprecations in EasyInstall in SetupTools. Not ignored by default, unlike DeprecationWarning."""
+    

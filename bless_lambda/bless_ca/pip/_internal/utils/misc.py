@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import contextlib
 import errno
 import io
-import locale
 # we have a submodule named 'logging' which would shadow this if we used the
 # regular name:
 import logging as std_logging
@@ -23,22 +22,34 @@ from pip._vendor import pkg_resources
 #       why we ignore the type on this import.
 from pip._vendor.retrying import retry  # type: ignore
 from pip._vendor.six import PY2
-from pip._vendor.six.moves import input
+from pip._vendor.six.moves import input, shlex_quote
 from pip._vendor.six.moves.urllib import parse as urllib_parse
+from pip._vendor.six.moves.urllib.parse import unquote as urllib_unquote
 
-from pip._internal.compat import (
-    WINDOWS, console_to_str, expanduser, stdlib_pkgs,
-)
 from pip._internal.exceptions import CommandError, InstallationError
 from pip._internal.locations import (
     running_under_virtualenv, site_packages, user_site, virtualenv_no_global,
     write_delete_marker_file,
 )
+from pip._internal.utils.compat import (
+    WINDOWS, console_to_str, expanduser, stdlib_pkgs,
+)
+from pip._internal.utils.typing import MYPY_CHECK_RUNNING
 
 if PY2:
     from io import BytesIO as StringIO
 else:
     from io import StringIO
+
+if MYPY_CHECK_RUNNING:
+    from typing import (
+        Optional, Tuple, Iterable, List, Match, Union, Any, Mapping, Text,
+        AnyStr, Container
+    )
+    from pip._vendor.pkg_resources import Distribution
+    from pip._internal.models.link import Link
+    from pip._internal.utils.ui import SpinnerInterface
+
 
 __all__ = ['rmtree', 'display_path', 'backup_dir',
            'ask', 'splitext',
@@ -49,19 +60,24 @@ __all__ = ['rmtree', 'display_path', 'backup_dir',
            'renames', 'get_prog',
            'unzip_file', 'untar_file', 'unpack_file', 'call_subprocess',
            'captured_stdout', 'ensure_dir',
-           'ARCHIVE_EXTENSIONS', 'SUPPORTED_EXTENSIONS',
+           'ARCHIVE_EXTENSIONS', 'SUPPORTED_EXTENSIONS', 'WHEEL_EXTENSION',
            'get_installed_version', 'remove_auth_from_url']
 
 
 logger = std_logging.getLogger(__name__)
+subprocess_logger = std_logging.getLogger('pip.subprocessor')
 
+LOG_DIVIDER = '----------------------------------------'
+
+WHEEL_EXTENSION = '.whl'
 BZ2_EXTENSIONS = ('.tar.bz2', '.tbz')
 XZ_EXTENSIONS = ('.tar.xz', '.txz', '.tlz', '.tar.lz', '.tar.lzma')
-ZIP_EXTENSIONS = ('.zip', '.whl')
+ZIP_EXTENSIONS = ('.zip', WHEEL_EXTENSION)
 TAR_EXTENSIONS = ('.tar.gz', '.tgz', '.tar')
 ARCHIVE_EXTENSIONS = (
     ZIP_EXTENSIONS + BZ2_EXTENSIONS + TAR_EXTENSIONS + XZ_EXTENSIONS)
 SUPPORTED_EXTENSIONS = ZIP_EXTENSIONS + TAR_EXTENSIONS
+
 try:
     import bz2  # noqa
     SUPPORTED_EXTENSIONS += BZ2_EXTENSIONS
@@ -76,14 +92,8 @@ except ImportError:
     logger.debug('lzma module is not available')
 
 
-def import_or_raise(pkg_or_module_string, ExceptionType, *args, **kwargs):
-    try:
-        return __import__(pkg_or_module_string)
-    except ImportError:
-        raise ExceptionType(*args, **kwargs)
-
-
 def ensure_dir(path):
+    # type: (AnyStr) -> None
     """os.path.makedirs without EEXIST."""
     try:
         os.makedirs(path)
@@ -93,6 +103,7 @@ def ensure_dir(path):
 
 
 def get_prog():
+    # type: () -> str
     try:
         prog = os.path.basename(sys.argv[0])
         if prog in ('__main__.py', '-c'):
@@ -107,6 +118,7 @@ def get_prog():
 # Retry every half second for up to 3 seconds
 @retry(stop_max_delay=3000, wait_fixed=500)
 def rmtree(dir, ignore_errors=False):
+    # type: (str, bool) -> None
     shutil.rmtree(dir, ignore_errors=ignore_errors,
                   onerror=rmtree_errorhandler)
 
@@ -127,6 +139,7 @@ def rmtree_errorhandler(func, path, exc_info):
 
 
 def display_path(path):
+    # type: (Union[str, Text]) -> str
     """Gives the display value for a given path, making it relative to cwd
     if possible."""
     path = os.path.normcase(os.path.abspath(path))
@@ -139,6 +152,7 @@ def display_path(path):
 
 
 def backup_dir(dir, ext='.bak'):
+    # type: (str, str) -> str
     """Figure out the name of a directory to back up the given dir to
     (adding .bak, .bak2, etc)"""
     n = 1
@@ -150,6 +164,7 @@ def backup_dir(dir, ext='.bak'):
 
 
 def ask_path_exists(message, options):
+    # type: (str, Iterable[str]) -> str
     for action in os.environ.get('PIP_EXISTS_ACTION', '').split():
         if action in options:
             return action
@@ -157,6 +172,7 @@ def ask_path_exists(message, options):
 
 
 def ask(message, options):
+    # type: (str, Iterable[str]) -> str
     """Ask the message interactively, with the given possible responses"""
     while 1:
         if os.environ.get('PIP_NO_INPUT'):
@@ -176,6 +192,7 @@ def ask(message, options):
 
 
 def format_size(bytes):
+    # type: (float) -> str
     if bytes > 1000 * 1000:
         return '%.1fMB' % (bytes / 1000.0 / 1000)
     elif bytes > 10 * 1000:
@@ -187,16 +204,22 @@ def format_size(bytes):
 
 
 def is_installable_dir(path):
-    """Return True if `path` is a directory containing a setup.py file."""
+    # type: (str) -> bool
+    """Is path is a directory containing setup.py or pyproject.toml?
+    """
     if not os.path.isdir(path):
         return False
     setup_py = os.path.join(path, 'setup.py')
     if os.path.isfile(setup_py):
         return True
+    pyproject_toml = os.path.join(path, 'pyproject.toml')
+    if os.path.isfile(pyproject_toml):
+        return True
     return False
 
 
 def is_svn_page(html):
+    # type: (Union[str, Text]) -> Optional[Match[Union[str, Text]]]
     """
     Returns true if the page appears to be the index page of an svn repository
     """
@@ -205,6 +228,7 @@ def is_svn_page(html):
 
 
 def file_contents(filename):
+    # type: (str) -> Text
     with open(filename, 'rb') as fp:
         return fp.read().decode('utf-8')
 
@@ -219,6 +243,7 @@ def read_chunks(file, size=io.DEFAULT_BUFFER_SIZE):
 
 
 def split_leading_dir(path):
+    # type: (Union[str, Text]) -> List[Union[str, Text]]
     path = path.lstrip('/').lstrip('\\')
     if '/' in path and (('\\' in path and path.find('/') < path.find('\\')) or
                         '\\' not in path):
@@ -226,10 +251,11 @@ def split_leading_dir(path):
     elif '\\' in path:
         return path.split('\\', 1)
     else:
-        return path, ''
+        return [path, '']
 
 
 def has_leading_dir(paths):
+    # type: (Iterable[Union[str, Text]]) -> bool
     """Returns true if all the paths have the same leading path name
     (i.e., everything is in one subdirectory in an archive)"""
     common_prefix = None
@@ -245,6 +271,7 @@ def has_leading_dir(paths):
 
 
 def normalize_path(path, resolve_symlinks=True):
+    # type: (str, bool) -> str
     """
     Convert a path to its canonical, case-normalized, absolute version.
 
@@ -258,6 +285,7 @@ def normalize_path(path, resolve_symlinks=True):
 
 
 def splitext(path):
+    # type: (str) -> Tuple[str, str]
     """Like os.path.splitext, but take off .tar too"""
     base, ext = posixpath.splitext(path)
     if base.lower().endswith('.tar'):
@@ -267,6 +295,7 @@ def splitext(path):
 
 
 def renames(old, new):
+    # type: (str, str) -> None
     """Like os.renames(), but handles renaming across devices."""
     # Implementation borrowed from os.renames().
     head, tail = os.path.split(new)
@@ -284,6 +313,7 @@ def renames(old, new):
 
 
 def is_local(path):
+    # type: (str) -> bool
     """
     Return True if path is within sys.prefix, if we're running in a virtualenv.
 
@@ -296,6 +326,7 @@ def is_local(path):
 
 
 def dist_is_local(dist):
+    # type: (Distribution) -> bool
     """
     Return True if given Distribution object is installed locally
     (i.e. within current virtualenv).
@@ -307,6 +338,7 @@ def dist_is_local(dist):
 
 
 def dist_in_usersite(dist):
+    # type: (Distribution) -> bool
     """
     Return True if given Distribution is installed in user site.
     """
@@ -315,6 +347,7 @@ def dist_in_usersite(dist):
 
 
 def dist_in_site_packages(dist):
+    # type: (Distribution) -> bool
     """
     Return True if given Distribution is installed in
     sysconfig.get_python_lib().
@@ -325,7 +358,10 @@ def dist_in_site_packages(dist):
 
 
 def dist_is_editable(dist):
-    """Is distribution an editable install?"""
+    # type: (Distribution) -> bool
+    """
+    Return True if given Distribution is an editable install.
+    """
     for path_item in sys.path:
         egg_link = os.path.join(path_item, dist.project_name + '.egg-link')
         if os.path.isfile(egg_link):
@@ -338,6 +374,7 @@ def get_installed_distributions(local_only=True,
                                 include_editables=True,
                                 editables_only=False,
                                 user_only=False):
+    # type: (bool, Container[str], bool, bool, bool) -> List[Distribution]
     """
     Return a list of installed Distribution objects.
 
@@ -381,7 +418,8 @@ def get_installed_distributions(local_only=True,
         def user_test(d):
             return True
 
-    return [d for d in pkg_resources.working_set
+    # because of pkg_resources vendoring, mypy cannot find stub in typeshed
+    return [d for d in pkg_resources.working_set  # type: ignore
             if local_test(d) and
             d.key not in skip and
             editable_test(d) and
@@ -391,6 +429,7 @@ def get_installed_distributions(local_only=True,
 
 
 def egg_link_path(dist):
+    # type: (Distribution) -> Optional[str]
     """
     Return the path for the .egg-link file if it exists, otherwise, None.
 
@@ -425,9 +464,11 @@ def egg_link_path(dist):
         egglink = os.path.join(site, dist.project_name) + '.egg-link'
         if os.path.isfile(egglink):
             return egglink
+    return None
 
 
 def dist_location(dist):
+    # type: (Distribution) -> str
     """
     Get the site-packages location of this distribution. Generally
     this is dist.location, except in the case of develop-installed
@@ -449,6 +490,7 @@ def current_umask():
 
 
 def unzip_file(filename, location, flatten=True):
+    # type: (str, str, bool) -> None
     """
     Unzip the file (with path `filename`) to the destination `location`.  All
     files are written based on system defaults and umask (i.e. permissions are
@@ -464,7 +506,6 @@ def unzip_file(filename, location, flatten=True):
         leading = has_leading_dir(zip.namelist()) and flatten
         for info in zip.infolist():
             name = info.filename
-            data = zip.read(name)
             fn = name
             if leading:
                 fn = split_leading_dir(name)[1]
@@ -475,9 +516,12 @@ def unzip_file(filename, location, flatten=True):
                 ensure_dir(fn)
             else:
                 ensure_dir(dir)
-                fp = open(fn, 'wb')
+                # Don't use read() to avoid allocating an arbitrarily large
+                # chunk of memory for the file's content
+                fp = zip.open(name)
                 try:
-                    fp.write(data)
+                    with open(fn, 'wb') as destfp:
+                        shutil.copyfileobj(fp, destfp)
                 finally:
                     fp.close()
                     mode = info.external_attr >> 16
@@ -492,6 +536,7 @@ def unzip_file(filename, location, flatten=True):
 
 
 def untar_file(filename, location):
+    # type: (str, str) -> None
     """
     Untar the file (with path `filename`) to the destination `location`.
     All files are written based on system defaults and umask (i.e. permissions
@@ -516,23 +561,21 @@ def untar_file(filename, location):
         mode = 'r:*'
     tar = tarfile.open(filename, mode)
     try:
-        # note: python<=2.5 doesn't seem to know about pax headers, filter them
         leading = has_leading_dir([
             member.name for member in tar.getmembers()
-            if member.name != 'pax_global_header'
         ])
         for member in tar.getmembers():
             fn = member.name
-            if fn == 'pax_global_header':
-                continue
             if leading:
-                fn = split_leading_dir(fn)[1]
+                # https://github.com/python/mypy/issues/1174
+                fn = split_leading_dir(fn)[1]  # type: ignore
             path = os.path.join(location, fn)
             if member.isdir():
                 ensure_dir(path)
             elif member.issym():
                 try:
-                    tar._extract_member(member, path)
+                    # https://github.com/python/typeshed/issues/2673
+                    tar._extract_member(member, path)  # type: ignore
                 except Exception as exc:
                     # Some corrupt tar files seem to produce this
                     # (specifically bad symlinks)
@@ -557,7 +600,8 @@ def untar_file(filename, location):
                     shutil.copyfileobj(fp, destfp)
                 fp.close()
                 # Update the timestamp (useful for cython compiled files)
-                tar.utime(member, path)
+                # https://github.com/python/typeshed/issues/2673
+                tar.utime(member, path)  # type: ignore
                 # member have any execute permissions for user/group/world?
                 if member.mode & 0o111:
                     # make dest file have execute for user/group/world
@@ -567,7 +611,13 @@ def untar_file(filename, location):
         tar.close()
 
 
-def unpack_file(filename, location, content_type, link):
+def unpack_file(
+    filename,  # type: str
+    location,  # type: str
+    content_type,  # type: Optional[str]
+    link  # type: Optional[Link]
+):
+    # type: (...) -> None
     filename = os.path.realpath(filename)
     if (content_type == 'application/zip' or
             filename.lower().endswith(ZIP_EXTENSIONS) or
@@ -600,50 +650,75 @@ def unpack_file(filename, location, content_type, link):
         )
 
 
-def call_subprocess(cmd, show_stdout=True, cwd=None,
-                    on_returncode='raise',
-                    command_desc=None,
-                    extra_environ=None, unset_environ=None, spinner=None):
+def format_command_args(args):
+    # type: (List[str]) -> str
+    """
+    Format command arguments for display.
+    """
+    return ' '.join(shlex_quote(arg) for arg in args)
+
+
+def call_subprocess(
+    cmd,  # type: List[str]
+    show_stdout=False,  # type: bool
+    cwd=None,  # type: Optional[str]
+    on_returncode='raise',  # type: str
+    extra_ok_returncodes=None,  # type: Optional[Iterable[int]]
+    command_desc=None,  # type: Optional[str]
+    extra_environ=None,  # type: Optional[Mapping[str, Any]]
+    unset_environ=None,  # type: Optional[Iterable[str]]
+    spinner=None  # type: Optional[SpinnerInterface]
+):
+    # type: (...) -> Optional[Text]
     """
     Args:
+      show_stdout: if true, use INFO to log the subprocess's stderr and
+        stdout streams.  Otherwise, use DEBUG.  Defaults to False.
+      extra_ok_returncodes: an iterable of integer return codes that are
+        acceptable, in addition to 0. Defaults to None, which means [].
       unset_environ: an iterable of environment variable names to unset
         prior to calling subprocess.Popen().
     """
+    if extra_ok_returncodes is None:
+        extra_ok_returncodes = []
     if unset_environ is None:
         unset_environ = []
-    # This function's handling of subprocess output is confusing and I
-    # previously broke it terribly, so as penance I will write a long comment
-    # explaining things.
+    # Most places in pip use show_stdout=False. What this means is--
     #
-    # The obvious thing that affects output is the show_stdout=
-    # kwarg. show_stdout=True means, let the subprocess write directly to our
-    # stdout. Even though it is nominally the default, it is almost never used
-    # inside pip (and should not be used in new code without a very good
-    # reason); as of 2016-02-22 it is only used in a few places inside the VCS
-    # wrapper code. Ideally we should get rid of it entirely, because it
-    # creates a lot of complexity here for a rarely used feature.
+    # - We connect the child's output (combined stderr and stdout) to a
+    #   single pipe, which we read.
+    # - We log this output to stderr at DEBUG level as it is received.
+    # - If DEBUG logging isn't enabled (e.g. if --verbose logging wasn't
+    #   requested), then we show a spinner so the user can still see the
+    #   subprocess is in progress.
+    # - If the subprocess exits with an error, we log the output to stderr
+    #   at ERROR level if it hasn't already been displayed to the console
+    #   (e.g. if --verbose logging wasn't enabled).  This way we don't log
+    #   the output to the console twice.
     #
-    # Most places in pip set show_stdout=False. What this means is:
-    # - We connect the child stdout to a pipe, which we read.
-    # - By default, we hide the output but show a spinner -- unless the
-    #   subprocess exits with an error, in which case we show the output.
-    # - If the --verbose option was passed (= loglevel is DEBUG), then we show
-    #   the output unconditionally. (But in this case we don't want to show
-    #   the output a second time if it turns out that there was an error.)
-    #
-    # stderr is always merged with stdout (even if show_stdout=True).
+    # If show_stdout=True, then the above is still done, but with DEBUG
+    # replaced by INFO.
     if show_stdout:
-        stdout = None
+        # Then log the subprocess output at INFO level.
+        log_subprocess = subprocess_logger.info
+        used_level = std_logging.INFO
     else:
-        stdout = subprocess.PIPE
+        # Then log the subprocess output using DEBUG.  This also ensures
+        # it will be logged to the log file (aka user_log), if enabled.
+        log_subprocess = subprocess_logger.debug
+        used_level = std_logging.DEBUG
+
+    # Whether the subprocess will be visible in the console.
+    showing_subprocess = subprocess_logger.getEffectiveLevel() <= used_level
+
+    # Only use the spinner if we're not showing the subprocess output
+    # and we have a spinner.
+    use_spinner = not showing_subprocess and spinner is not None
+
     if command_desc is None:
-        cmd_parts = []
-        for part in cmd:
-            if ' ' in part or '\n' in part or '"' in part or "'" in part:
-                part = '"%s"' % part.replace('"', '\\"')
-            cmd_parts.append(part)
-        command_desc = ' '.join(cmd_parts)
-    logger.debug("Running command %s", command_desc)
+        command_desc = format_command_args(cmd)
+
+    log_subprocess("Running command %s", command_desc)
     env = os.environ.copy()
     if extra_environ:
         env.update(extra_environ)
@@ -652,55 +727,55 @@ def call_subprocess(cmd, show_stdout=True, cwd=None,
     try:
         proc = subprocess.Popen(
             cmd, stderr=subprocess.STDOUT, stdin=subprocess.PIPE,
-            stdout=stdout, cwd=cwd, env=env,
+            stdout=subprocess.PIPE, cwd=cwd, env=env,
         )
         proc.stdin.close()
     except Exception as exc:
-        logger.critical(
+        subprocess_logger.critical(
             "Error %s while executing command %s", exc, command_desc,
         )
         raise
     all_output = []
-    if stdout is not None:
-        while True:
-            line = console_to_str(proc.stdout.readline())
-            if not line:
-                break
-            line = line.rstrip()
-            all_output.append(line + '\n')
-            if logger.getEffectiveLevel() <= std_logging.DEBUG:
-                # Show the line immediately
-                logger.debug(line)
-            else:
-                # Update the spinner
-                if spinner is not None:
-                    spinner.spin()
+    while True:
+        line = console_to_str(proc.stdout.readline())
+        if not line:
+            break
+        line = line.rstrip()
+        all_output.append(line + '\n')
+
+        # Show the line immediately.
+        log_subprocess(line)
+        # Update the spinner.
+        if use_spinner:
+            spinner.spin()
     try:
         proc.wait()
     finally:
         if proc.stdout:
             proc.stdout.close()
-    if spinner is not None:
-        if proc.returncode:
+    proc_had_error = (
+        proc.returncode and proc.returncode not in extra_ok_returncodes
+    )
+    if use_spinner:
+        if proc_had_error:
             spinner.finish("error")
         else:
             spinner.finish("done")
-    if proc.returncode:
+    if proc_had_error:
         if on_returncode == 'raise':
-            if (logger.getEffectiveLevel() > std_logging.DEBUG and
-                    not show_stdout):
-                logger.info(
+            if not showing_subprocess:
+                # Then the subprocess streams haven't been logged to the
+                # console yet.
+                subprocess_logger.error(
                     'Complete output from command %s:', command_desc,
                 )
-                logger.info(
-                    ''.join(all_output) +
-                    '\n----------------------------------------'
-                )
+                # The all_output value already ends in a newline.
+                subprocess_logger.error(''.join(all_output) + LOG_DIVIDER)
             raise InstallationError(
                 'Command "%s" failed with error code %s in %s'
                 % (command_desc, proc.returncode, cwd))
         elif on_returncode == 'warn':
-            logger.warning(
+            subprocess_logger.warning(
                 'Command "%s" had error code %s in %s',
                 command_desc, proc.returncode, cwd,
             )
@@ -709,32 +784,7 @@ def call_subprocess(cmd, show_stdout=True, cwd=None,
         else:
             raise ValueError('Invalid value: on_returncode=%s' %
                              repr(on_returncode))
-    if not show_stdout:
-        return ''.join(all_output)
-
-
-def read_text_file(filename):
-    """Return the contents of *filename*.
-
-    Try to decode the file contents with utf-8, the preferred system encoding
-    (e.g., cp1252 on some Windows machines), and latin1, in that order.
-    Decoding a byte string with latin1 will never raise an error. In the worst
-    case, the returned string will contain some garbage characters.
-
-    """
-    with open(filename, 'rb') as fp:
-        data = fp.read()
-
-    encodings = ['utf-8', locale.getpreferredencoding(False), 'latin1']
-    for enc in encodings:
-        try:
-            data = data.decode(enc)
-        except UnicodeDecodeError:
-            continue
-        break
-
-    assert type(data) != bytes  # Latin1 should have worked.
-    return data
+    return ''.join(all_output)
 
 
 def _make_build_dir(build_dir):
@@ -801,6 +851,13 @@ def captured_stdout():
     return captured_output('stdout')
 
 
+def captured_stderr():
+    """
+    See captured_stdout().
+    """
+    return captured_output('stderr')
+
+
 class cached_property(object):
     """A property that is only computed once per instance and then replaces
        itself with an ordinary attribute. Deleting the attribute resets the
@@ -852,22 +909,77 @@ def enum(*sequential, **named):
     return type('Enum', (), enums)
 
 
-def remove_auth_from_url(url):
-    # Return a copy of url with 'username:password@' removed.
-    # username/pass params are passed to subversion through flags
-    # and are not recognized in the url.
+def split_auth_from_netloc(netloc):
+    """
+    Parse out and remove the auth information from a netloc.
 
-    # parsed url
+    Returns: (netloc, (username, password)).
+    """
+    if '@' not in netloc:
+        return netloc, (None, None)
+
+    # Split from the right because that's how urllib.parse.urlsplit()
+    # behaves if more than one @ is present (which can be checked using
+    # the password attribute of urlsplit()'s return value).
+    auth, netloc = netloc.rsplit('@', 1)
+    if ':' in auth:
+        # Split from the left because that's how urllib.parse.urlsplit()
+        # behaves if more than one : is present (which again can be checked
+        # using the password attribute of the return value)
+        user_pass = auth.split(':', 1)
+    else:
+        user_pass = auth, None
+
+    user_pass = tuple(
+        None if x is None else urllib_unquote(x) for x in user_pass
+    )
+
+    return netloc, user_pass
+
+
+def redact_netloc(netloc):
+    # type: (str) -> str
+    """
+    Replace the password in a netloc with "****", if it exists.
+
+    For example, "user:pass@example.com" returns "user:****@example.com".
+    """
+    netloc, (user, password) = split_auth_from_netloc(netloc)
+    if user is None:
+        return netloc
+    password = '' if password is None else ':****'
+    return '{user}{password}@{netloc}'.format(user=urllib_parse.quote(user),
+                                              password=password,
+                                              netloc=netloc)
+
+
+def _transform_url(url, transform_netloc):
     purl = urllib_parse.urlsplit(url)
-    stripped_netloc = \
-        purl.netloc.split('@')[-1]
-
+    netloc = transform_netloc(purl.netloc)
     # stripped url
     url_pieces = (
-        purl.scheme, stripped_netloc, purl.path, purl.query, purl.fragment
+        purl.scheme, netloc, purl.path, purl.query, purl.fragment
     )
     surl = urllib_parse.urlunsplit(url_pieces)
     return surl
+
+
+def _get_netloc(netloc):
+    return split_auth_from_netloc(netloc)[0]
+
+
+def remove_auth_from_url(url):
+    # type: (str) -> str
+    # Return a copy of url with 'username:password@' removed.
+    # username/pass params are passed to subversion through flags
+    # and are not recognized in the url.
+    return _transform_url(url, _get_netloc)
+
+
+def redact_password_from_url(url):
+    # type: (str) -> str
+    """Replace the password in a given url with ****."""
+    return _transform_url(url, redact_netloc)
 
 
 def protect_pip_from_modification_on_windows(modifying_pip):

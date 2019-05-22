@@ -38,6 +38,10 @@ from botocore import UNSIGNED
 # "from botocore.client import Config".
 from botocore.config import Config
 from botocore.history import get_global_history_recorder
+from botocore.discovery import (
+    EndpointDiscoveryHandler, EndpointDiscoveryManager,
+    block_endpoint_discovery_required_operations
+)
 
 
 logger = logging.getLogger(__name__)
@@ -48,7 +52,8 @@ class ClientCreator(object):
     """Creates client objects for a service."""
     def __init__(self, loader, endpoint_resolver, user_agent, event_emitter,
                  retry_handler_factory, retry_config_translator,
-                 response_parser_factory=None, exceptions_factory=None):
+                 response_parser_factory=None, exceptions_factory=None,
+                 config_store=None):
         self._loader = loader
         self._endpoint_resolver = endpoint_resolver
         self._user_agent = user_agent
@@ -57,6 +62,11 @@ class ClientCreator(object):
         self._retry_config_translator = retry_config_translator
         self._response_parser_factory = response_parser_factory
         self._exceptions_factory = exceptions_factory
+        # TODO: Migrate things away from scoped_config in favor of the
+        # config_store.  The config store can pull things from both the scoped
+        # config and environment variables (and potentially more in the
+        # future).
+        self._config_store = config_store
 
     def create_client(self, service_name, region_name, is_secure=True,
                       endpoint_url=None, verify=None,
@@ -79,6 +89,9 @@ class ClientCreator(object):
         self._register_s3_events(
             service_client, endpoint_bridge, endpoint_url, client_config,
             scoped_config)
+        self._register_endpoint_discovery(
+            service_client, endpoint_url, client_config
+        )
         return service_client
 
     def create_client_class(self, service_name, api_version=None):
@@ -90,9 +103,11 @@ class ClientCreator(object):
         py_name_to_operation_name = self._create_name_mapping(service_model)
         class_attributes['_PY_TO_OP_NAME'] = py_name_to_operation_name
         bases = [BaseClient]
-        self._event_emitter.emit('creating-client-class.%s' % service_name,
-                                 class_attributes=class_attributes,
-                                 base_classes=bases)
+        service_id = service_model.service_id.hyphenize()
+        self._event_emitter.emit(
+            'creating-client-class.%s' % service_id,
+            class_attributes=class_attributes,
+            base_classes=bases)
         class_name = get_service_module_name(service_model)
         cls = type(str(class_name), tuple(bases), class_attributes)
         return cls
@@ -105,6 +120,8 @@ class ClientCreator(object):
 
     def _register_retries(self, client):
         endpoint_prefix = client.meta.service_model.endpoint_prefix
+        service_id = client.meta.service_model.service_id
+        service_event_name = service_id.hyphenize()
 
         # First, we load the entire retry config for all services,
         # then pull out just the information we need.
@@ -122,9 +139,35 @@ class ClientCreator(object):
                      client.meta.service_model.service_name)
         handler = self._retry_handler_factory.create_retry_handler(
             retry_config, endpoint_prefix)
-        unique_id = 'retry-config-%s' % endpoint_prefix
-        client.meta.events.register('needs-retry.%s' % endpoint_prefix,
-                                    handler, unique_id=unique_id)
+        unique_id = 'retry-config-%s' % service_event_name
+        client.meta.events.register(
+            'needs-retry.%s' % service_event_name, handler,
+            unique_id=unique_id
+        )
+
+    def _register_endpoint_discovery(self, client, endpoint_url, config):
+        if endpoint_url is not None:
+            # Don't register any handlers in the case of a custom endpoint url
+            return
+        # Only attach handlers if the service supports discovery
+        if client.meta.service_model.endpoint_discovery_operation is None:
+            return
+        events = client.meta.events
+        service_id = client.meta.service_model.service_id.hyphenize()
+        enabled = False
+        if config and config.endpoint_discovery_enabled is not None:
+            enabled = config.endpoint_discovery_enabled
+        elif self._config_store:
+            enabled = self._config_store.get_config_variable(
+                'endpoint_discovery_enabled')
+        if enabled:
+            manager = EndpointDiscoveryManager(client)
+            handler = EndpointDiscoveryHandler(manager)
+            handler.register(events, service_id)
+        else:
+            events.register('before-parameter-build',
+                            block_endpoint_discovery_required_operations)
+
 
     def _register_s3_events(self, client, endpoint_bridge, endpoint_url,
                             client_config, scoped_config):
@@ -341,6 +384,7 @@ class ClientEndpointBridge(object):
     utilize "us-east-1" by default if no region can be resolved."""
 
     DEFAULT_ENDPOINT = '{service}.{region}.amazonaws.com'
+    _DUALSTACK_ENABLED_SERVICES = ['s3', 's3-control']
 
     def __init__(self, endpoint_resolver, scoped_config=None,
                  client_config=None, default_endpoint=None,
@@ -394,7 +438,7 @@ class ClientEndpointBridge(object):
             signature_version=signature_version)
 
     def _is_s3_dualstack_mode(self, service_name):
-        if service_name != 's3':
+        if service_name not in self._DUALSTACK_ENABLED_SERVICES:
             return False
         # TODO: This normalization logic is duplicated from the
         # ClientArgsCreator class.  Consolidate everything to
@@ -508,8 +552,8 @@ class ClientEndpointBridge(object):
                 return 'v4'
             # Now just iterate over the signature versions in order until we
             # find the first one that is known to Botocore.
-            for known in AUTH_TYPE_MAPS:
-                if known in potential_versions:
+            for known in potential_versions:
+                if known in AUTH_TYPE_MAPS:
                     return known
         raise UnknownSignatureVersionError(
             signature_version=resolved.get('signatureVersions'))
@@ -543,7 +587,9 @@ class BaseClient(object):
         self._register_handlers()
 
     def __getattr__(self, item):
-        event_name = 'getattr.%s.%s' % (self._service_model.service_name, item)
+        event_name = 'getattr.%s.%s' % (
+            self._service_model.service_id.hyphenize(), item
+        )
         handler, event_response = self.meta.events.emit_until_response(
             event_name, client=self)
 
@@ -557,9 +603,11 @@ class BaseClient(object):
 
     def _register_handlers(self):
         # Register the handler required to sign requests.
-        self.meta.events.register('request-created.%s' %
-                                  self.meta.service_model.endpoint_prefix,
-                                  self._request_signer.handler)
+        service_id = self.meta.service_model.service_id.hyphenize()
+        self.meta.events.register(
+            'request-created.%s' % service_id,
+            self._request_signer.handler
+        )
 
     @property
     def _service_model(self):
@@ -585,9 +633,10 @@ class BaseClient(object):
         request_dict = self._convert_to_request_dict(
             api_params, operation_model, context=request_context)
 
+        service_id = self._service_model.service_id.hyphenize()
         handler, event_response = self.meta.events.emit_until_response(
-            'before-call.{endpoint_prefix}.{operation_name}'.format(
-                endpoint_prefix=self._service_model.endpoint_prefix,
+            'before-call.{service_id}.{operation_name}'.format(
+                service_id=service_id,
                 operation_name=operation_name),
             model=operation_model, params=request_dict,
             request_signer=self._request_signer, context=request_context)
@@ -595,12 +644,12 @@ class BaseClient(object):
         if event_response is not None:
             http, parsed_response = event_response
         else:
-            http, parsed_response = self._endpoint.make_request(
-                operation_model, request_dict)
+            http, parsed_response = self._make_request(
+                operation_model, request_dict, request_context)
 
         self.meta.events.emit(
-            'after-call.{endpoint_prefix}.{operation_name}'.format(
-                endpoint_prefix=self._service_model.endpoint_prefix,
+            'after-call.{service_id}.{operation_name}'.format(
+                service_id=service_id,
                 operation_name=operation_name),
             http_response=http, parsed=parsed_response,
             model=operation_model, context=request_context
@@ -613,12 +662,26 @@ class BaseClient(object):
         else:
             return parsed_response
 
+    def _make_request(self, operation_model, request_dict, request_context):
+        try:
+            return self._endpoint.make_request(operation_model, request_dict)
+        except Exception as e:
+            self.meta.events.emit(
+                'after-call-error.{service_id}.{operation_name}'.format(
+                    service_id=self._service_model.service_id.hyphenize(),
+                    operation_name=operation_model.name),
+                exception=e, context=request_context
+            )
+            raise
+
     def _convert_to_request_dict(self, api_params, operation_model,
                                  context=None):
         api_params = self._emit_api_params(
             api_params, operation_model, context)
         request_dict = self._serializer.serialize_to_request(
             api_params, operation_model)
+        if not self._client_config.inject_host_prefix:
+            request_dict.pop('host_prefix', None)
         prepare_request_dict(request_dict, endpoint_url=self._endpoint.host,
                              user_agent=self._client_config.user_agent,
                              context=context)
@@ -632,18 +695,19 @@ class BaseClient(object):
         # Emit an event that allows users to modify the parameters at the
         # beginning of the method. It allows handlers to modify existing
         # parameters or return a new set of parameters to use.
+        service_id = self._service_model.service_id.hyphenize()
         responses = self.meta.events.emit(
-            'provide-client-params.{endpoint_prefix}.{operation_name}'.format(
-                endpoint_prefix=self._service_model.endpoint_prefix,
+            'provide-client-params.{service_id}.{operation_name}'.format(
+                service_id=service_id,
                 operation_name=operation_name),
             params=api_params, model=operation_model, context=context)
         api_params = first_non_none_response(responses, default=api_params)
 
         event_name = (
-            'before-parameter-build.{endpoint_prefix}.{operation_name}')
+            'before-parameter-build.{service_id}.{operation_name}')
         self.meta.events.emit(
             event_name.format(
-                endpoint_prefix=self._service_model.endpoint_prefix,
+                service_id=service_id,
                 operation_name=operation_name),
             params=api_params, model=operation_model, context=context)
         return api_params

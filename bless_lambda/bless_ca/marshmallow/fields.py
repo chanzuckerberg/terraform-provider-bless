@@ -3,19 +3,19 @@
 
 from __future__ import absolute_import, unicode_literals
 
-import collections
+import copy
 import datetime as dt
 import uuid
 import warnings
 import decimal
-from operator import attrgetter
 
 from marshmallow import validate, utils, class_registry
 from marshmallow.base import FieldABC, SchemaABC
 from marshmallow.utils import missing as missing_
-from marshmallow.compat import text_type, basestring
+from marshmallow.compat import text_type, basestring, Mapping
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Validator
+from marshmallow.warnings import RemovedInMarshmallow3Warning
 
 __all__ = [
     'Field',
@@ -118,7 +118,7 @@ class Field(FieldABC):
     #: :exc:`marshmallow.ValidationError`.
     default_error_messages = {
         'required': 'Missing data for required field.',
-        'type': 'Invalid input type.', # used by Unmarshaller
+        'type': 'Invalid input type.',  # used by Unmarshaller
         'null': 'Field may not be null.',
         'validator_failed': 'Invalid value.'
     }
@@ -443,6 +443,8 @@ class Nested(Field):
         schema = self.schema
         if nested_obj is None:
             return None
+        if self.many and utils.is_iterable_but_not_string(nested_obj):
+            nested_obj = list(nested_obj)
         if not self.__updated_fields:
             schema._update_fields(obj=nested_obj, many=self.many)
             self.__updated_fields = True
@@ -556,6 +558,7 @@ class List(Field):
 
     def _add_to_schema(self, field_name, schema):
         super(List, self)._add_to_schema(field_name, schema)
+        self.container = copy.deepcopy(self.container)
         self.container.parent = self
         self.container.name = field_name
 
@@ -644,7 +647,8 @@ class Number(Field):
 
     num_type = float
     default_error_messages = {
-        'invalid': 'Not a valid number.'
+        'invalid': 'Not a valid number.',
+        'too_large': 'Number too large.',
     }
 
     def __init__(self, as_string=False, **kwargs):
@@ -661,8 +665,10 @@ class Number(Field):
         """Format the value or raise a :exc:`ValidationError` if an error occurs."""
         try:
             return self._format_num(value)
-        except (TypeError, ValueError) as err:
+        except (TypeError, ValueError):
             self.fail('invalid')
+        except OverflowError:
+            self.fail('too_large')
 
     def _to_string(self, value):
         return str(value)
@@ -826,6 +832,8 @@ class FormattedString(Field):
     _CHECK_ATTRIBUTE = False
 
     def __init__(self, src_str, *args, **kwargs):
+        warnings.warn('FormattedString is deprecated and will be removed in marshmallow 3. '
+                      'Use a Method or Function field instead.', RemovedInMarshmallow3Warning)
         Field.__init__(self, *args, **kwargs)
         self.src_str = text_type(src_str)
 
@@ -833,7 +841,7 @@ class FormattedString(Field):
         try:
             data = utils.to_marshallable_type(obj)
             return self.src_str.format(**data)
-        except (TypeError, IndexError) as error:
+        except (TypeError, IndexError):
             self.fail('format')
 
 
@@ -905,7 +913,7 @@ class DateTime(Field):
         if format_func:
             try:
                 return format_func(value, localtime=self.localtime)
-            except (AttributeError, ValueError) as err:
+            except (AttributeError, ValueError):
                 self.fail('format', input=value)
         else:
             return value.strftime(self.dateformat)
@@ -971,7 +979,6 @@ class Time(Field):
         """Deserialize an ISO8601-formatted time to a :class:`datetime.time` object."""
         if not value:   # falsy values are invalid
             self.fail('invalid')
-            raise err
         try:
             return utils.from_iso_time(value)
         except (AttributeError, TypeError, ValueError):
@@ -1089,7 +1096,7 @@ class Dict(Field):
     }
 
     def _deserialize(self, value, attr, data):
-        if isinstance(value, collections.Mapping):
+        if isinstance(value, Mapping):
             return value
         else:
             self.fail('invalid')
@@ -1147,6 +1154,7 @@ class Email(ValidatedField, String):
     :param kwargs: The same keyword arguments that :class:`String` receives.
     """
     default_error_messages = {'invalid': 'Not a valid email address.'}
+
     def __init__(self, *args, **kwargs):
         String.__init__(self, *args, **kwargs)
         # Insert validation into self.validators so that multiple errors can be
@@ -1182,7 +1190,7 @@ class Method(Field):
     def __init__(self, serialize=None, deserialize=None, method_name=None, **kwargs):
         if method_name is not None:
             warnings.warn('"method_name" argument of fields.Method is deprecated. '
-                          'Use the "serialize" argument instead.', DeprecationWarning)
+                          'Use the "serialize" argument instead.', RemovedInMarshmallow3Warning)
 
         self.serialize_method_name = self.method_name = serialize or method_name
         self.deserialize_method_name = deserialize
@@ -1239,7 +1247,7 @@ class Function(Field):
     def __init__(self, serialize=None, deserialize=None, func=None, **kwargs):
         if func:
             warnings.warn('"func" argument of fields.Function is deprecated. '
-                          'Use the "serialize" argument instead.', DeprecationWarning)
+                          'Use the "serialize" argument instead.', RemovedInMarshmallow3Warning)
             serialize = func
         super(Function, self).__init__(**kwargs)
         self.serialize_func = self.func = serialize and utils.callable_or_raise(serialize)
@@ -1265,7 +1273,6 @@ class Function(Field):
             return func(value, self.parent.context)
         else:
             return func(value)
-
 
 
 class Constant(Field):

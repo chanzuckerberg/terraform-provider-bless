@@ -6,8 +6,8 @@ import logging
 from pip._vendor import six
 from pip._vendor.six.moves import zip_longest
 
-from pip._internal.basecommand import Command
-from pip._internal.cmdoptions import index_group, make_option_group
+from pip._internal.cli import cmdoptions
+from pip._internal.cli.base_command import Command
 from pip._internal.exceptions import CommandError
 from pip._internal.index import PackageFinder
 from pip._internal.utils.misc import (
@@ -102,7 +102,9 @@ class ListCommand(Command):
             help='Include editable package from output.',
             default=True,
         )
-        index_opts = make_option_group(index_group, self.parser)
+        index_opts = cmdoptions.make_option_group(
+            cmdoptions.index_group, self.parser
+        )
 
         self.parser.insert_option_group(0, index_opts)
         self.parser.insert_option_group(0, cmd_opts)
@@ -116,7 +118,6 @@ class ListCommand(Command):
             index_urls=index_urls,
             allow_all_prereleases=options.pre,
             trusted_hosts=options.trusted_hosts,
-            process_dependency_links=options.process_dependency_links,
             session=session,
         )
 
@@ -132,13 +133,17 @@ class ListCommand(Command):
             include_editables=options.include_editable,
         )
 
+        # get_not_required must be called firstly in order to find and
+        # filter out all dependencies correctly. Otherwise a package
+        # can't be identified as requirement because some parent packages
+        # could be filtered out before.
+        if options.not_required:
+            packages = self.get_not_required(packages, options)
+
         if options.outdated:
             packages = self.get_outdated(packages, options)
         elif options.uptodate:
             packages = self.get_uptodate(packages, options)
-
-        if options.not_required:
-            packages = self.get_not_required(packages, options)
 
         self.output_package_listing(packages, options)
 
@@ -166,16 +171,8 @@ class ListCommand(Command):
             logger.debug('Ignoring indexes: %s', ','.join(index_urls))
             index_urls = []
 
-        dependency_links = []
-        for dist in packages:
-            if dist.has_metadata('dependency_links.txt'):
-                dependency_links.extend(
-                    dist.get_metadata_lines('dependency_links.txt'),
-                )
-
         with self._build_session(options) as session:
             finder = self._build_package_finder(options, index_urls, session)
-            finder.add_dependency_links(dependency_links)
 
             for dist in packages:
                 typ = 'unknown'
@@ -185,10 +182,11 @@ class ListCommand(Command):
                     all_candidates = [candidate for candidate in all_candidates
                                       if not candidate.version.is_prerelease]
 
-                if not all_candidates:
+                evaluator = finder.candidate_evaluator
+                best_candidate = evaluator.get_best_candidate(all_candidates)
+                if best_candidate is None:
                     continue
-                best_candidate = max(all_candidates,
-                                     key=finder._candidate_sort_key)
+
                 remote_version = best_candidate.version
                 if best_candidate.location.is_wheel:
                     typ = 'wheel'
