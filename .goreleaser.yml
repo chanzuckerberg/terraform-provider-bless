@@ -1,3 +1,7 @@
+before:
+  hooks:
+    - make clean
+    - make packr
 builds:
   - binary: "terraform-provider-bless_{{ .Tag }}"
     env:
