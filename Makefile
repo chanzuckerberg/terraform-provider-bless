@@ -7,6 +7,11 @@ test: packr
 packr:
 	packr
 
+release: ## run a release
+	bff bump
+	git push
+	goreleaser release
+
 release: packr
 	goreleaser release --rm-dist
 
