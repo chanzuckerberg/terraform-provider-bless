@@ -4,3 +4,4 @@ terraform-provider-bless
 terraform.tfstate*
 dist
 *-packr.go
+main

@@ -4,7 +4,7 @@ build: packr
 test: packr
 	@TF_ACC=yes go test -cover -v ./...
 
-packr:
+packr: clean
 	packr
 
 clean: ## clean the repo
