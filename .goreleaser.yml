@@ -15,3 +15,5 @@ release:
   github:
     owner: chanzuckerberg
     name: terraform-provider-bless
+env_files:
+  github_token: ~/.config/goreleaser/github_token
