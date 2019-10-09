@@ -2,7 +2,7 @@ package provider
 
 import (
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/aws"
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 // Provider is a provider
@@ -25,7 +25,7 @@ func Provider() *schema.Provider {
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"bless_ca":         CA(),
+			"bless_ca":       CA(),
 			"bless_ecdsa_ca": ECDSACA(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{

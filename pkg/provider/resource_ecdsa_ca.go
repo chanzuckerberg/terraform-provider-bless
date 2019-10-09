@@ -7,7 +7,7 @@ import (
 
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/aws"
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/util"
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/pkg/errors"
 )
 
