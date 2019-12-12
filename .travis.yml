@@ -1,6 +1,8 @@
 dist: trusty
 language: go
   - make setup
+install:
+  - make setup
 jobs:
   include:
     - name: lint
