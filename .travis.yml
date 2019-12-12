@@ -1,6 +1,7 @@
 dist: trusty
 language: go
-  - make setup
+go:
+  - "1.13.1"
 install:
   - make setup
 jobs:
