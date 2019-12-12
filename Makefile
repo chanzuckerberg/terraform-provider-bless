@@ -39,19 +39,19 @@ deps:
 .PHONY: deps
 
 packr: clean
-	packr
+	./bin/packr
 .PHONY: packr
 
 clean: ## clean the repo
 	rm terraform-provider-bless 2>/dev/null || true
 	go clean
 	rm -rf dist 2>/dev/null || true
-	packr clean
+	./bin/packr clean
 	rm coverage.out 2>/dev/null || true
 .PHONY: clean
 
 release: ## run a release
-	bff bump
+	./bin.bff bump
 	git push
 	goreleaser release --rm-dist
 .PHONY: release
