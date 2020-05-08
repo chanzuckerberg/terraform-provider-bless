@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/kms"
 	tf "github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/terraform"
@@ -26,6 +27,7 @@ func TestKMSPublicKey(t *testing.T) {
 	r.NoError(err)
 	output := &kms.GetPublicKeyOutput{
 		PublicKey: derBytes,
+		KeyId:     aws.String("key id"),
 	}
 
 	kmsMock.On("GetPublicKey", mock.Anything).Return(output, nil)
