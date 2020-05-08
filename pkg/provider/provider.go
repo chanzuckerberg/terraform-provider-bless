@@ -30,6 +30,7 @@ func Provider() *schema.Provider {
 		},
 		DataSourcesMap: map[string]*schema.Resource{
 			"bless_lambda": Lambda(),
+			"kms_public_key":
 		},
 		ConfigureFunc: configureProvider,
 	}
