@@ -67,7 +67,7 @@ func (l *dataKMSPublicKey) Read(d *schema.ResourceData, meta interface{}) error 
 	if err != nil {
 		return errors.Wrap(err, "could not ssh parse kms public key")
 	}
-	d.SetId(*output.KeyId)
-	d.Set(schemaPublicKey, string(ssh.MarshalAuthorizedKey(sshPub)))
+	d.SetId(*output.KeyId)                                           //nolint
+	d.Set(schemaPublicKey, string(ssh.MarshalAuthorizedKey(sshPub))) //nolint
 	return nil
 }

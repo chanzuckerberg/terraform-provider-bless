@@ -18,7 +18,8 @@ func TestCreateECDSA(t *testing.T) {
 	providers, kmsMock := getTestProviders()
 
 	ciphertext := make([]byte, 10)
-	rand.Read(ciphertext)
+	_, err := rand.Read(ciphertext)
+	a.NoError(err)
 	output := &kms.EncryptOutput{
 		CiphertextBlob: ciphertext,
 	}

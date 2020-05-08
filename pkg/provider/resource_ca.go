@@ -80,9 +80,9 @@ func (ca *resourceCA) Create(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	d.Set(schemaEncryptedPrivateKey, keyPair.B64EncryptedPrivateKey)
-	d.Set(schemaPublicKey, keyPair.PublicKey)
-	d.Set(schemaEncryptedPassword, encryptedPassword)
+	d.Set(schemaEncryptedPrivateKey, keyPair.B64EncryptedPrivateKey) // nolint
+	d.Set(schemaPublicKey, keyPair.PublicKey) // nolint
+	d.Set(schemaEncryptedPassword, encryptedPassword) // nolint
 	d.SetId(util.HashForState(keyPair.PublicKey))
 	return nil
 }

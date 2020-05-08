@@ -240,6 +240,9 @@ func (l *resourceLambda) archive(d *schema.ResourceData, meta interface{}) error
 		files = append(files, path)
 		return nil
 	})
+	if err != nil {
+		return errors.Wrap(err, "could not walk zip")
+	}
 
 	// Sort so stable adding of files to zip
 	sort.Strings(files)
@@ -275,7 +278,7 @@ func (l *resourceLambda) Read(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return err
 	}
-	d.Set(SchemaOutputBase64Sha256, fileHash)
-	d.SetId(fileHash)
+	d.Set(SchemaOutputBase64Sha256, fileHash) //nolint
+	d.SetId(fileHash) //nolint
 	return err
 }
