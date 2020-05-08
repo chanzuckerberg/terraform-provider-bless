@@ -3,8 +3,8 @@ package provider_test
 import (
 	"testing"
 
-	"github.com/aws/aws-sdk-go/service/kms/kmsiface"
 	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/aws/aws-sdk-go/service/kms/kmsiface"
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/aws"
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/provider"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
@@ -21,6 +21,12 @@ type KMSMock struct {
 func (k *KMSMock) Encrypt(input *kms.EncryptInput) (*kms.EncryptOutput, error) {
 	args := k.Called(input)
 	output := args.Get(0).(*kms.EncryptOutput)
+	return output, args.Error(1)
+}
+
+func (k *KMSMock) GetPublicKey(input *kms.GetPublicKeyInput) (*kms.GetPublicKeyOutput, error) {
+	args := k.Called(input)
+	output := args.Get(0).(*kms.GetPublicKeyOutput)
 	return output, args.Error(1)
 }
 

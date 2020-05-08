@@ -2,6 +2,7 @@ package provider
 
 import (
 	"crypto/x509"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/chanzuckerberg/terraform-provider-bless/pkg/aws"
@@ -48,7 +49,11 @@ func (l *dataKMSPublicKey) Read(d *schema.ResourceData, meta interface{}) error 
 	}
 	kmsKeyID := d.Get(schemaKmsKeyID).(string)
 
-	output, err := awsClient.KMS.Svc.GetPublicKey(
+	svc := awsClient.KMS.Svc
+
+	fmt.Printf("nil svc: %#v", svc == nil)
+
+	output, err := svc.GetPublicKey(
 		&kms.GetPublicKeyInput{KeyId: &kmsKeyID},
 	)
 	if err != nil {
@@ -62,5 +67,7 @@ func (l *dataKMSPublicKey) Read(d *schema.ResourceData, meta interface{}) error 
 	if err != nil {
 		return errors.Wrap(err, "could not ssh parse kms public key")
 	}
-	return d.Set(schemaPublicKey, string(ssh.MarshalAuthorizedKey(sshPub)))
+	d.SetId(output.KeyId)
+	d.Set(schemaPublicKey, string(ssh.MarshalAuthorizedKey(sshPub)))
+	return nil
 }
