@@ -1,4 +1,3 @@
-export GOFLAGS=-mod=vendor
 export GO111MODULE=on
 
 setup: ## setup development dependencies
@@ -35,7 +34,6 @@ test-ci: packr
 
 deps:
 	go mod tidy
-	go mod vendor
 .PHONY: deps
 
 packr: clean
