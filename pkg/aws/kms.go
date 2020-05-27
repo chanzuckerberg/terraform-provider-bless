@@ -3,6 +3,8 @@ package aws
 import (
 	"encoding/base64"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/aws/aws-sdk-go/service/kms/kmsiface"
@@ -15,8 +17,8 @@ type KMS struct {
 }
 
 // NewKMS returns a KMS client
-func NewKMS(s *session.Session) KMS {
-	return KMS{kms.New(s)}
+func NewKMS(s *session.Session, creds *credentials.Credentials) KMS {
+	return KMS{kms.New(s, &aws.Config{Credentials: creds})}
 }
 
 // EncryptBytes encrypts the plaintext using the keyID key, result is base64 encoded
