@@ -49,7 +49,7 @@ clean: ## clean the repo
 .PHONY: clean
 
 release: ## run a release
-	./bin.bff bump
+	./bin/bff bump
 	git push
 	goreleaser release --rm-dist
 .PHONY: release
