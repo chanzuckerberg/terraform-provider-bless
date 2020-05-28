@@ -2,6 +2,8 @@ package aws
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
@@ -27,8 +29,15 @@ func NewClient(d *schema.ResourceData) (*Client, error) {
 			Profile:           d.Get("profile").(string),
 		},
 	))
+
+	var creds *credentials.Credentials
+
+	if r, ok := d.Get("role_arn").(string); ok {
+		creds = stscreds.NewCredentials(sess, r)
+	}
+
 	client := &Client{
-		KMS: NewKMS(sess),
+		KMS: NewKMS(sess, creds),
 	}
 
 	return client, nil

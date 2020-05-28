@@ -19,9 +19,14 @@ func Provider() *schema.Provider {
 				InputDefault: "us-east-1",
 			},
 			"profile": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Default:  "",
+				Type:          schema.TypeString,
+				Optional:      true,
+				ConflictsWith: []string{"role_arn"},
+			},
+			"role_arn": {
+				Type:          schema.TypeString,
+				Optional:      true,
+				ConflictsWith: []string{"profile"},
 			},
 		},
 		ResourcesMap: map[string]*schema.Resource{
