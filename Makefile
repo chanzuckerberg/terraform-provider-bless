@@ -56,9 +56,9 @@ clean: ## clean the repo
 .PHONY: clean
 
 check-release-prereqs:
-# ifndef KEYBASE_KEY_ID
-# 	$(error KEYBASE_KEY_ID is undefined)
-# endif
+ifndef KEYBASE_KEY_ID
+	$(error KEYBASE_KEY_ID is undefined)
+endif
 .PHONY: check-release-prereqs
 
 release: check-release-prereqs ## run a release
