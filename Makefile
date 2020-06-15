@@ -1,4 +1,6 @@
 export GO111MODULE=on
+VERSION=$(shell cat VERSION)
+export BASE_BINARY_NAME=terraform-provider-snowflake_v$(VERSION)
 
 setup: ## setup development dependencies
 	./.godownloader-packr.sh -d v1.24.1
