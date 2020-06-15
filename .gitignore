@@ -1,5 +1,5 @@
 .terraform
-terraform-provider-bless
+terraform-provider-bless*
 .vscode
 terraform.tfstate*
 dist

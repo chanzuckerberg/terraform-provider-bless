@@ -28,7 +28,7 @@ lint-all: ## run all the linters
 .PHONY: lint-all
 
 build: packr
-	@CGO_ENABLED=0 GOOS=linux go build ${LDFLAGS} -o $(BASE_BINARY_NAME) .
+	@CGO_ENABLED=0 go build ${LDFLAGS} -o $(BASE_BINARY_NAME) .
 .PHONY:  build
 
 test: deps packr
