@@ -46,3 +46,7 @@ signs:
       - "${signature}"
       - "-k"
       - "{{.Env.KEYBASE_KEY_ID}}"
+
+
+release:
+  prerelease: true

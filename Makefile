@@ -48,8 +48,22 @@ clean: ## clean the repo
 	rm coverage.out 2>/dev/null || true
 .PHONY: clean
 
-release: ## run a release
+check-release-prereqs:
+# ifndef KEYBASE_KEY_ID
+# 	$(error KEYBASE_KEY_ID is undefined)
+# endif
+.PHONY: check-release-prereqs
+
+release: check-release-prereqs ## run a release
 	./bin/bff bump
 	git push
-	goreleaser release --rm-dist
+	goreleaser release
 .PHONY: release
+
+release-prerelease: check-release-prereqs build ## release to github as a 'pre-release'
+	version=`./$(BASE_BINARY_NAME) -version`; \
+	git tag v"$$version"; \
+	git push
+	git push --tags
+	goreleaser release -f .goreleaser.prerelease.yml --debug --rm-dist
+.PHONY: release-prerelease
