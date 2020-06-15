@@ -1,6 +1,11 @@
 export GO111MODULE=on
 VERSION=$(shell cat VERSION)
-export BASE_BINARY_NAME=terraform-provider-snowflake_v$(VERSION)
+export BASE_BINARY_NAME=terraform-provider-bless_v$(VERSION)
+SHA=$(shell git rev-parse --short HEAD)
+VERSION=$(shell cat VERSION)
+export DIRTY=$(shell if `git diff-index --quiet HEAD --`; then echo false; else echo true;  fi)
+LDFLAGS=-ldflags "-w -s -X github.com/chanzuckerberg/terraform-provider-bless/pkg/version.GitSha=${SHA} -X github.com/chanzuckerberg/terraform-provider-bless/pkg/version.Version=${VERSION} -X github.com/chanzuckerberg/terraform-provider-bless/pkg/version.Dirty=${DIRTY}"
+
 
 setup: ## setup development dependencies
 	./.godownloader-packr.sh -d v1.24.1
@@ -23,7 +28,7 @@ lint-all: ## run all the linters
 .PHONY: lint-all
 
 build: packr
-	@CGO_ENABLED=0 GOOS=linux go build -o terraform-provider-bless
+	@CGO_ENABLED=0 GOOS=linux go build ${LDFLAGS} -o $(BASE_BINARY_NAME) .
 .PHONY:  build
 
 test: deps packr
