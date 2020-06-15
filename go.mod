@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/aws/aws-sdk-go v1.30.23
+	github.com/chanzuckerberg/go-misc v0.0.0-20200611000103-3caf6f173497
 	github.com/gobuffalo/packr v1.30.1
 	github.com/hashicorp/terraform-plugin-sdk v1.12.0
 	github.com/pkg/errors v0.9.1
