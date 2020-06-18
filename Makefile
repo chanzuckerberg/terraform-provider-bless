@@ -1,4 +1,11 @@
 export GO111MODULE=on
+VERSION=$(shell cat VERSION)
+export BASE_BINARY_NAME=terraform-provider-bless_v$(VERSION)
+SHA=$(shell git rev-parse --short HEAD)
+VERSION=$(shell cat VERSION)
+export DIRTY=$(shell if `git diff-index --quiet HEAD --`; then echo false; else echo true;  fi)
+LDFLAGS=-ldflags "-w -s -X github.com/chanzuckerberg/terraform-provider-bless/pkg/version.GitSha=${SHA} -X github.com/chanzuckerberg/terraform-provider-bless/pkg/version.Version=${VERSION} -X github.com/chanzuckerberg/terraform-provider-bless/pkg/version.Dirty=${DIRTY}"
+
 
 setup: ## setup development dependencies
 	./.godownloader-packr.sh -d v1.24.1
@@ -21,7 +28,7 @@ lint-all: ## run all the linters
 .PHONY: lint-all
 
 build: packr
-	@CGO_ENABLED=0 GOOS=linux go build -o terraform-provider-bless
+	@CGO_ENABLED=0 go build ${LDFLAGS} -o $(BASE_BINARY_NAME) .
 .PHONY:  build
 
 test: deps packr
@@ -48,8 +55,22 @@ clean: ## clean the repo
 	rm coverage.out 2>/dev/null || true
 .PHONY: clean
 
-release: ## run a release
+check-release-prereqs:
+ifndef KEYBASE_KEY_ID
+	$(error KEYBASE_KEY_ID is undefined)
+endif
+.PHONY: check-release-prereqs
+
+release: check-release-prereqs ## run a release
 	./bin/bff bump
 	git push
-	goreleaser release --rm-dist
+	goreleaser release --debug --rm-dist
 .PHONY: release
+
+release-prerelease: check-release-prereqs build ## release to github as a 'pre-release'
+	version=`./$(BASE_BINARY_NAME) -version`; \
+	git tag v"$$version"; \
+	git push
+	git push --tags
+	goreleaser release -f .goreleaser.prerelease.yml --debug --rm-dist
+.PHONY: release-prerelease
