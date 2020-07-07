@@ -32,7 +32,7 @@ func NewClient(d *schema.ResourceData) (*Client, error) {
 
 	var creds *credentials.Credentials
 
-	if r, ok := d.Get("role_arn").(string); ok {
+	if r, ok := d.Get("role_arn").(string); ok && r != "" {
 		creds = stscreds.NewCredentials(sess, r)
 	}
 
