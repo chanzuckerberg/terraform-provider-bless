@@ -74,3 +74,8 @@ release-prerelease: check-release-prereqs build ## release to github as a 'pre-r
 	git push --tags
 	goreleaser release -f .goreleaser.prerelease.yml --debug --rm-dist
 .PHONY: release-prerelease
+
+install-tf: build ## installs plugin where terraform can find it
+	mkdir -p $(HOME)/.terraform.d/plugins
+	cp ./$(BASE_BINARY_NAME) $(HOME)/.terraform.d/plugins/$(BASE_BINARY_NAME)
+.PHONY: install-tf
