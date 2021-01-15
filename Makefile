@@ -31,7 +31,7 @@ build: packr
 	@CGO_ENABLED=0 go build ${LDFLAGS} -o $(BASE_BINARY_NAME) .
 .PHONY:  build
 
-test: deps packr
+test: deps
 	@TF_ACC=yes go test -cover -v ./...
 .PHONY: test
 
@@ -43,15 +43,10 @@ deps:
 	go mod tidy
 .PHONY: deps
 
-packr: clean
-	./bin/packr
-.PHONY: packr
-
 clean: ## clean the repo
 	rm terraform-provider-bless 2>/dev/null || true
 	go clean
 	rm -rf dist 2>/dev/null || true
-	./bin/packr clean
 	rm coverage.out 2>/dev/null || true
 .PHONY: clean
 
