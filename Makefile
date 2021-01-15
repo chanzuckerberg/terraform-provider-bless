@@ -8,7 +8,6 @@ LDFLAGS=-ldflags "-w -s -X github.com/chanzuckerberg/terraform-provider-bless/pk
 
 
 setup: ## setup development dependencies
-	./.godownloader-packr.sh -d v1.24.1
 	curl -sfL https://raw.githubusercontent.com/chanzuckerberg/bff/main/download.sh | sh
 	curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh
 	curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh| sh
@@ -27,15 +26,15 @@ lint-all: ## run all the linters
 	./bin/golangci-lint run
 .PHONY: lint-all
 
-build: packr
+build:
 	@CGO_ENABLED=0 go build ${LDFLAGS} -o $(BASE_BINARY_NAME) .
 .PHONY:  build
 
-test: deps packr
+test: deps
 	@TF_ACC=yes go test -cover -v ./...
 .PHONY: test
 
-test-ci: packr
+test-ci:
 	@TF_ACC=yes go test -cover -v ./...
 .PHONY: test-ci
 
@@ -43,15 +42,10 @@ deps:
 	go mod tidy
 .PHONY: deps
 
-packr: clean
-	./bin/packr
-.PHONY: packr
-
 clean: ## clean the repo
 	rm terraform-provider-bless 2>/dev/null || true
 	go clean
 	rm -rf dist 2>/dev/null || true
-	./bin/packr clean
 	rm coverage.out 2>/dev/null || true
 .PHONY: clean
 
