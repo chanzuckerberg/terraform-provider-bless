@@ -44,32 +44,3 @@ This module only creates logical resources and therefore only contributes to ter
 ```sh
 terraform taint bless.example
 ```
-
-## bless_lambda
-This data source creates a zip with the lambda code. Generally used with a [lambda resource](https://www.terraform.io/docs/providers/aws/r/lambda_function.html)
-
-### Example usage
-```hcl
-provider "bless" {
-  region  = "us-east-1"
-  profile = "<aws_profile>"
-}
-
-resource "bless_ca" "example" {
-  kms_key_id = "<kms_key_id>"
-}
-
-data "bless_lambda" "code" {
-  encrypted_password = "${bless_ca.example.encrypted_password}"
-  encrypted_ca = "${bless_ca.example}"
-  service_name = "my-bless-example" # give this CA a name
-  kmsauth_key_id = "<kmsauth_key_id>"
-  output_path = "${path.module}/bless.zip"
-}
-
-resource "aws_lambda_function" "bless" {
-  filename = "${path.module}/bless.zip"
-  source_code_hash = "${data.bless_lambda.code.output_base64sha256}"
-  ...
-}
-```
