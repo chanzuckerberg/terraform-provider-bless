@@ -3,7 +3,7 @@ module github.com/chanzuckerberg/terraform-provider-bless
 go 1.15
 
 require (
-	github.com/aws/aws-sdk-go v1.36.28
+	github.com/aws/aws-sdk-go v1.37.15
 	github.com/chanzuckerberg/go-misc v0.0.0-20201222183624-ac0eadedb39c
 	github.com/hashicorp/terraform-plugin-sdk v1.16.0
 	github.com/pkg/errors v0.9.1
